@@ -255,6 +255,13 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         enabled,
         snapshot,
         snapshotForCwd,
+        skills: {
+          list: (workspaceCwd) =>
+            discoverClaudeSkills(effectiveConfig, workspaceCwd, processEnv).pipe(
+              Effect.provideService(FileSystem.FileSystem, fileSystem),
+              Effect.provideService(Path.Path, path),
+            ),
+        },
         adapter,
         textGeneration,
       } satisfies ProviderInstance;

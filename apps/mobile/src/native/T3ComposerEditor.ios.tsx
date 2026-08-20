@@ -137,7 +137,11 @@ export function ComposerEditor({
   // first controlled payload must be a non-echo so a restored draft (or a
   // recycled native view) is applied rather than skipped.
   const nativeEventSnapshotsRef = useRef<ComposerNativeEventSnapshot[]>([]);
-  const confirmedTokensRef = useRef(collectComposerInlineTokens(props.value));
+  const confirmedTokensRef = useRef(
+    collectComposerInlineTokens(props.value, {
+      knownSlashSkillNames: new Set(skills.map((skill) => skill.name)),
+    }),
+  );
   const bodyText = useScaledTextRole("body");
   const theme = useUniwindTheme();
   const fontFamily = useFontFamily("regular");
@@ -157,9 +161,11 @@ export function ComposerEditor({
     () => new Map(skills.map((skill) => [skill.name, skill.displayName?.trim() || skill.name])),
     [skills],
   );
+  const knownSlashSkillNames = useMemo(() => new Set(skills.map((skill) => skill.name)), [skills]);
   const tokensJson = useMemo(() => {
     const tokens = collectComposerInlineTokens(props.value, {
       preserveTrailingFrom: confirmedTokensRef.current,
+      knownSlashSkillNames,
     });
     confirmedTokensRef.current = tokens;
     return JSON.stringify(
@@ -193,7 +199,7 @@ export function ComposerEditor({
         };
       }),
     );
-  }, [props.value, props.context, skillLabels]);
+  }, [knownSlashSkillNames, props.value, props.context, skillLabels]);
   // Every render resolves against the snapshot history, so a render whose
   // (value, selection) lags the acknowledged native state is stamped behind
   // the native revision and rejected by the editor instead of re-applying a

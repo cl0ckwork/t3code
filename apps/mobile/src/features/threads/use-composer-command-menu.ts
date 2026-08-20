@@ -3,6 +3,7 @@ import type {
   ProjectId,
   ProviderInteractionMode,
   ServerProvider,
+  ThreadId,
 } from "@t3tools/contracts";
 import { COMPOSER_CONTEXT_MAX_RECORDS } from "@t3tools/contracts";
 import { Alert } from "react-native";
@@ -40,6 +41,7 @@ import type { ComposerEditorSelection } from "../../components/ComposerEditor";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useComposerPathSearch, useComposerPullRequestSearch } from "../../state/queries";
+import { useEnvironmentQuery } from "../../state/query";
 import type { ComposerCommandItem } from "./ComposerCommandPopover";
 import { matchesSlashSkillQuery } from "./composerSlashSkillSearch";
 
@@ -126,6 +128,7 @@ export function resolveComposerCommandSelection(input: {
   readonly trigger: Pick<ComposerTrigger, "rangeStart" | "rangeEnd">;
   readonly item: ComposerCommandItem;
   readonly allowInteractionMode: boolean;
+  readonly skillPrefix?: "$" | "/" | undefined;
 }): {
   readonly text: string;
   readonly cursor: number;
@@ -147,7 +150,7 @@ export function resolveComposerCommandSelection(input: {
   if (item.type === "path") {
     replacement = `${serializeComposerFileLink(item.path)} `;
   } else if (item.type === "skill") {
-    replacement = `$${item.skill.name} `;
+    replacement = `${input.skillPrefix ?? "$"}${item.skill.name} `;
   } else if (item.type === "slash-command") {
     replacement = `/${item.command} `;
   } else if (item.type === "provider-slash-command") {
@@ -164,6 +167,8 @@ export function useComposerCommandMenu({
   draftMessage,
   ownerKey,
   environmentId,
+  projectId,
+  threadId,
   projectCwd,
   pullRequestProjectId = null,
   pullRequestRepository = null,
@@ -179,6 +184,8 @@ export function useComposerCommandMenu({
   readonly draftMessage: string;
   readonly ownerKey: string | null;
   readonly environmentId: EnvironmentId | null;
+  readonly projectId: ProjectId | null;
+  readonly threadId: ThreadId | null;
   readonly projectCwd: string | null;
   readonly pullRequestProjectId?: ProjectId | null;
   readonly pullRequestRepository?: string | null;
@@ -193,6 +200,32 @@ export function useComposerCommandMenu({
   /** Picking /usage-limits is the action itself; the draft keeps nothing of it. */
   readonly onUsageLimits?: () => void;
 }) {
+  const scopedProviderSkillsQuery = useEnvironmentQuery(
+    environmentId !== null && selectedProviderStatus !== null && projectId !== null
+      ? serverEnvironment.providerSkills({
+          environmentId,
+          input: {
+            instanceId: selectedProviderStatus.instanceId,
+            projectId,
+            ...(threadId !== null ? { threadId } : {}),
+          },
+        })
+      : null,
+  );
+  const projectProviderSkillsQuery = useEnvironmentQuery(
+    environmentId !== null &&
+    selectedProviderStatus !== null &&
+    projectId !== null &&
+    scopedProviderSkillsQuery.error !== null
+      ? serverEnvironment.providerSkills({
+          environmentId,
+          input: {
+            instanceId: selectedProviderStatus.instanceId,
+            projectId,
+          },
+        })
+      : null,
+  );
   const [selection, setSelection] = useState(() => composerSelectionAtEnd(draftMessage));
   const previousOwnerKeyRef = useRef(ownerKey);
   const onSelectionChange = useCallback((nextSelection: ComposerEditorSelection) => {
@@ -230,6 +263,11 @@ export function useComposerCommandMenu({
       selectedProviderStatus ? resolveProviderSkillsForCwd(selectedProviderStatus, projectCwd) : [],
     [projectCwd, selectedProviderStatus],
   );
+  // A provider snapshot is global-only. Prefer the server-resolved workspace
+  // inventory whenever it succeeds, so a newly opened project cannot inherit
+  // skills from the launch directory or another worktree.
+  const selectedProviderSkills =
+    scopedProviderSkillsQuery.data?.skills ?? projectProviderSkillsQuery.data?.skills ?? skills;
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
   });
@@ -331,7 +369,8 @@ export function useComposerCommandMenu({
 
     if (trigger.kind === "slash-command") {
       const q = trigger.query.toLowerCase();
-      const visibleSkills = getProviderSkillsForSlashMenu(skills, true);
+      const workspaceSkillNames = new Set(selectedProviderSkills.map((skill) => skill.name));
+      const visibleSkills = getProviderSkillsForSlashMenu(selectedProviderSkills, true);
       const commandItems = buildComposerSlashCommandItems({
         query: q,
         atMessageStart: trigger.rangeStart === 0,
@@ -348,7 +387,12 @@ export function useComposerCommandMenu({
               ),
             }
           : null,
-      });
+      }).filter(
+        (item) =>
+          item.type !== "provider-slash-command" ||
+          selectedProviderStatus?.driver !== "claudeAgent" ||
+          !workspaceSkillNames.has(item.command.name),
+      );
 
       const skillItems = visibleSkills
         .filter((skill) => matchesSlashSkillQuery(skill, q))
@@ -364,7 +408,9 @@ export function useComposerCommandMenu({
     }
 
     if (trigger.kind === "skill") {
-      const enabledSkills = dedupeProviderSkillsByName(skills.filter(isProviderSkillUserInvocable));
+      const enabledSkills = dedupeProviderSkillsByName(
+        selectedProviderSkills.filter(isProviderSkillUserInvocable),
+      );
       const normalizedQuery = normalizeSearchQuery(trigger.query, {
         trimLeadingPattern: /^\p{Sc}+/u,
       });
@@ -468,8 +514,8 @@ export function useComposerCommandMenu({
     pathSearch.entries,
     pullRequestSearch.entries,
     projectCwd,
+    selectedProviderSkills,
     selectedProviderStatus,
-    skills,
     trigger,
     offersUsageLimits,
   ]);
@@ -530,6 +576,7 @@ export function useComposerCommandMenu({
         allowInteractionMode:
           onUpdateInteractionMode !== undefined &&
           selectedProviderStatus?.showInteractionModeToggle !== false,
+        skillPrefix: selectedProviderStatus?.driver === "claudeAgent" ? "/" : "$",
       });
       setSelection({ start: result.cursor, end: result.cursor });
       onChangeDraftMessage(result.text);
@@ -554,9 +601,11 @@ export function useComposerCommandMenu({
     onSelectionChange,
     trigger,
     items,
-    skills,
-    isLoading:
-      trigger?.kind === "pull-request" ? pullRequestSearch.isPending : pathSearch.isPending,
+    skills: selectedProviderSkills,
+    isLoading: pathSearch.isPending ||
+      (trigger?.kind === "pull-request" && pullRequestSearch.isPending) ||
+      (trigger?.kind === "skill" &&
+        (scopedProviderSkillsQuery.isPending || projectProviderSkillsQuery.isPending)),
     error:
       trigger?.kind === "pull-request"
         ? pullRequestProjectId === null || pullRequestRepository === null

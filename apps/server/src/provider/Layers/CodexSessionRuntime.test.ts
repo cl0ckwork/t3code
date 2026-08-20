@@ -287,6 +287,32 @@ describe("buildTurnStartParams", () => {
     });
   });
 
+  it("keeps explicit skills as native structured turn input", () => {
+    const params = Effect.runSync(
+      buildTurnStartParams({
+        threadId: "provider-thread-1",
+        runtimeMode: "full-access",
+        prompt: "$review changes",
+        attachments: [
+          {
+            type: "skill",
+            name: "review",
+            path: "/workspace/.agents/skills/review/SKILL.md",
+          },
+        ],
+      }),
+    );
+
+    NodeAssert.deepEqual(params.input, [
+      { type: "text", text: "$review changes" },
+      {
+        type: "skill",
+        name: "review",
+        path: "/workspace/.agents/skills/review/SKILL.md",
+      },
+    ]);
+  });
+
   it("reports the same fallback model and effort in settings and instructions", () => {
     const params = Effect.runSync(
       buildTurnStartParams({

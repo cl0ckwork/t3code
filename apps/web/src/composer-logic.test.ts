@@ -252,6 +252,16 @@ describe("detectComposerTrigger", () => {
       kind: "pull-request",
       query: "8737",
       rangeStart: "Compare this with ".length,
+  });
+
+  it("detects a slash skill trigger after an existing inline token", () => {
+    const text = "Use $review-follow-up /sprint";
+    const trigger = detectComposerTrigger(text, text.length);
+
+    expect(trigger).toEqual({
+      kind: "slash-command",
+      query: "sprint",
+      rangeStart: "Use $review-follow-up ".length,
       rangeEnd: text.length,
     });
   });
@@ -293,7 +303,6 @@ describe("detectComposerTrigger", () => {
     expect(detectComposerTrigger("# Heading", "# Heading".length)).toBeNull();
     expect(detectComposerTrigger("issue#123", "issue#123".length)).toBeNull();
   });
-
   it("detects @path trigger in the middle of existing text", () => {
     // User typed @ between "inspect " and "in this sentence"
     const text = "Please inspect @in this sentence";

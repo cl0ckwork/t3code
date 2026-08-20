@@ -8,6 +8,7 @@ import {
   ProviderDriverKind,
   type ProjectId,
   type OrchestrationSession,
+  ServerProviderSkillLookupError,
   ThreadId,
   type ProviderSession,
   type RuntimeMode,
@@ -16,6 +17,7 @@ import {
 import { assistantCitationsToPlainText } from "@t3tools/shared/assistantCitations";
 import { projectComposerContextForProvider } from "@t3tools/shared/composerContextReferences";
 import { isTemporaryWorktreeBranch, WORKTREE_BRANCH_PREFIX } from "@t3tools/shared/git";
+import { collectComposerInlineTokens } from "@t3tools/shared/composerInlineTokens";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
@@ -45,6 +47,8 @@ import { TextGeneration } from "../../textGeneration/TextGeneration.ts";
 import { ProviderAuthService } from "../../provider/Services/ProviderAuthService.ts";
 import { ProviderService } from "../../provider/Services/ProviderService.ts";
 import { ProviderRegistry } from "../../provider/Services/ProviderRegistry.ts";
+import { ProviderInstanceRegistry } from "../../provider/Services/ProviderInstanceRegistry.ts";
+import { makeProviderSkillLookup } from "../../provider/ProviderSkillLookup.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import {
@@ -118,6 +122,13 @@ const turnStartKeyForEvent = (event: ProviderIntentEvent): string =>
 const HANDLED_TURN_START_KEY_MAX = 10_000;
 const HANDLED_TURN_START_KEY_TTL = Duration.minutes(30);
 const DEFAULT_RUNTIME_MODE: RuntimeMode = "full-access";
+
+function explicitSkillNames(text: string): ReadonlyArray<string> {
+  const completeTokens = collectComposerInlineTokens(`${text}\n`);
+  return [
+    ...new Set(completeTokens.flatMap((token) => (token.type === "skill" ? [token.value] : []))),
+  ];
+}
 
 function providerErrorLabel(value: string | undefined): string {
   const normalized = value?.trim();
@@ -214,6 +225,7 @@ const make = Effect.gen(function* () {
   const providerAuthService = yield* ProviderAuthService;
   const providerService = yield* ProviderService;
   const providerRegistry = yield* ProviderRegistry;
+  const providerInstanceRegistry = yield* ProviderInstanceRegistry;
   const gitWorkflow = yield* GitWorkflowService;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -520,6 +532,28 @@ const make = Effect.gen(function* () {
     return yield* projectionSnapshotQuery
       .getThreadDetailById(threadId, { activityKinds: [] })
       .pipe(Effect.map(Option.getOrUndefined));
+  });
+
+  const providerSkillLookup = yield* makeProviderSkillLookup({
+    getProject: (projectId) =>
+      projectionSnapshotQuery.getProjectShellById(projectId).pipe(
+        Effect.mapError(
+          () =>
+            new ServerProviderSkillLookupError({
+              message: `Could not load project '${projectId}' for workspace skill discovery.`,
+            }),
+        ),
+      ),
+    getThread: (threadId) =>
+      projectionSnapshotQuery.getThreadShellById(threadId).pipe(
+        Effect.mapError(
+          () =>
+            new ServerProviderSkillLookupError({
+              message: `Could not load thread '${threadId}' for workspace skill discovery.`,
+            }),
+        ),
+      ),
+    getInstance: providerInstanceRegistry.getInstance,
   });
 
   const rejectStartedThreadModelChangeIfRequired = Effect.fnUntraced(function* (input: {
@@ -867,11 +901,37 @@ const make = Effect.gen(function* () {
             }
           : requestedModelSelection
         : input.modelSelection;
+    const providerInstanceId =
+      activeSession?.providerInstanceId ?? requestedModelSelection.instanceId;
+    const providerInstance = yield* providerInstanceRegistry.getInstance(providerInstanceId);
+    const skillNames = explicitSkillNames(input.messageText);
+    const skills =
+      providerInstance?.driverKind === ProviderDriverKind.make("codex") && skillNames.length > 0
+        ? yield* providerSkillLookup
+            .resolveNames({
+              instanceId: providerInstanceId,
+              projectId: thread.projectId,
+              threadId: input.threadId,
+              names: skillNames,
+            })
+            .pipe(
+              Effect.mapError(
+                (cause) =>
+                  new ProviderAdapterRequestError({
+                    provider: ProviderDriverKind.make("codex"),
+                    method: "turn/start",
+                    detail: cause.message,
+                    cause,
+                  }),
+              ),
+            )
+        : [];
 
     return {
       threadId: input.threadId,
       ...(normalizedInput ? { input: normalizedInput } : {}),
       ...(normalizedAttachments.length > 0 ? { attachments: normalizedAttachments } : {}),
+      ...(skills.length > 0 ? { skills } : {}),
       ...(modelForTurn !== undefined ? { modelSelection: modelForTurn } : {}),
       ...(input.interactionMode !== undefined ? { interactionMode: input.interactionMode } : {}),
     };

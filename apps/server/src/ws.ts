@@ -55,6 +55,7 @@ import {
   ProjectSearchContentsError,
   ProjectSearchEntriesError,
   ProjectWriteFileError,
+  ProviderDriverKind,
   ProviderUploadFeedbackError,
   ProviderSetupError,
   RelayClientInstallFailedError,
@@ -68,6 +69,7 @@ import {
   AssetWorkspaceContextResolutionError,
   RpcClientId,
   EnvironmentAuthorizationError,
+  ServerProviderSkillLookupError,
   ThreadId,
   type TerminalAttachStreamEvent,
   type TerminalError,
@@ -81,6 +83,7 @@ import {
   type WorktreeSetupSnapshot,
 } from "@t3tools/contracts";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
+import { collectComposerInlineTokens } from "@t3tools/shared/composerInlineTokens";
 import { HttpRouter, HttpServerRequest, HttpServerRespondable } from "effect/unstable/http";
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
 
@@ -110,6 +113,7 @@ import {
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
 import * as ProviderService from "./provider/Services/ProviderService.ts";
 import * as ProviderSessionDirectory from "./provider/Services/ProviderSessionDirectory.ts";
+import { makeProviderSkillLookup } from "./provider/ProviderSkillLookup.ts";
 import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner.ts";
 import { ProviderAuthService } from "./provider/Services/ProviderAuthService.ts";
 import { ProviderInstanceRegistry } from "./provider/Services/ProviderInstanceRegistry.ts";
@@ -188,6 +192,11 @@ const resolveDiscoveryForConfig = <A, E, R>(
     Effect.timeoutOption(CONFIG_DISCOVERY_TIMEOUT),
     Effect.map(Option.getOrElse(onTimeout)),
   );
+
+function explicitSkillNames(text: string): ReadonlyArray<string> {
+  const tokens = collectComposerInlineTokens(`${text}\n`);
+  return [...new Set(tokens.flatMap((token) => (token.type === "skill" ? [token.value] : [])))];
+}
 
 export const resolveAvailableEditorsForConfig = <A, E, R>(
   discovery: Effect.Effect<ReadonlyArray<A>, E, R>,
@@ -665,6 +674,27 @@ const makeWsRpcLayer = (
       const resourceTelemetry = yield* ResourceTelemetry.ResourceTelemetry;
       const usage = yield* UsageService.UsageService;
       const relayClient = yield* RelayClient.RelayClient;
+      const providerSkillLookup = yield* makeProviderSkillLookup({
+        getProject: (projectId) =>
+          projectionSnapshotQuery.getProjectShellById(projectId).pipe(
+            Effect.mapError(
+              () =>
+                new ServerProviderSkillLookupError({
+                  message: `Could not load project '${projectId}' for skill discovery.`,
+                }),
+            ),
+          ),
+        getThread: (threadId) =>
+          projectionSnapshotQuery.getThreadShellById(threadId).pipe(
+            Effect.mapError(
+              () =>
+                new ServerProviderSkillLookupError({
+                  message: `Could not load thread '${threadId}' for skill discovery.`,
+                }),
+            ),
+          ),
+        getInstance: providerInstances.getInstance,
+      });
       const authorizationError = (requiredScope: AuthEnvironmentScope) =>
         new EnvironmentAuthorizationError({
           message: `The authenticated token is missing required scope: ${requiredScope}.`,
@@ -1828,6 +1858,55 @@ const makeWsRpcLayer = (
           .refreshStatus(cwd)
           .pipe(Effect.ignoreCause({ log: true }), Effect.forkDetach, Effect.asVoid);
 
+      const validateExplicitCodexSkills = (
+        command: OrchestrationCommand,
+      ): Effect.Effect<void, OrchestrationDispatchCommandError> => {
+        if (command.type !== "thread.turn.start") {
+          return Effect.void;
+        }
+        const names = explicitSkillNames(command.message.text);
+        if (names.length === 0) {
+          return Effect.void;
+        }
+        return Effect.gen(function* () {
+          const thread = yield* projectionSnapshotQuery.getThreadShellById(command.threadId).pipe(
+            Effect.mapError(
+              (cause) =>
+                new OrchestrationDispatchCommandError({
+                  message: "Could not load the thread before resolving its selected skills.",
+                  cause,
+                }),
+            ),
+          );
+          if (Option.isNone(thread)) {
+            return;
+          }
+          const instanceId =
+            command.modelSelection?.instanceId ?? thread.value.modelSelection.instanceId;
+          const instance = yield* providerInstances.getInstance(instanceId);
+          if (instance?.driverKind !== ProviderDriverKind.make("codex")) {
+            return;
+          }
+          yield* providerSkillLookup
+            .resolveNames({
+              instanceId,
+              projectId: thread.value.projectId,
+              threadId: command.threadId,
+              names,
+            })
+            .pipe(
+              Effect.mapError(
+                (cause) =>
+                  new OrchestrationDispatchCommandError({
+                    message: cause.message,
+                    cause,
+                  }),
+              ),
+              Effect.asVoid,
+            );
+        });
+      };
+
       return WsRpcGroup.of({
         [ORCHESTRATION_WS_METHODS.dispatchCommand]: (command) =>
           observeRpcEffect(
@@ -1835,6 +1914,7 @@ const makeWsRpcLayer = (
             Effect.gen(function* () {
               yield* ProjectCloneTracker.rejectCommandsDuringClone(projectCloneTracker, command);
               const normalizedCommand = yield* normalizeDispatchCommand(command);
+              yield* validateExplicitCodexSkills(normalizedCommand);
               // Archive removes the thread from the client, so this transport
               // closes its session and terminals after the command lands.
               // Settlement cleanup is driven by thread.settled events in the

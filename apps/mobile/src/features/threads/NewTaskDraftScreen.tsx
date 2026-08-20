@@ -451,7 +451,12 @@ export function NewTaskDraftScreen(props: {
       ? (selectedProject?.id ?? null)
       : null,
     pullRequestRepository: selectedProject?.repositoryIdentity?.displayName ?? null,
-    projectCwd: composerWorkspaceCwd,
+    projectId: selectedProject?.id ?? null,
+    threadId: null,
+    projectCwd:
+      (flow.workspaceMode === "worktree"
+        ? selectedProject?.workspaceRoot
+        : (flow.selectedWorktreePath ?? selectedProject?.workspaceRoot)) || null,
     selectedProviderStatus: flow.selectedProviderStatus,
     hasThread: false,
     hasCompactableConversation: false,

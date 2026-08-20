@@ -31,6 +31,7 @@ import type {
   RuntimeMode,
   ScopedThreadRef,
   ServerProvider,
+  ServerProviderSkill,
   ThreadId,
   SnapShotSource,
 } from "@t3tools/contracts";
@@ -967,16 +968,21 @@ import type { PendingApproval, PendingUserInput } from "../../session-logic";
 import type { ContextWindowSnapshot } from "../../lib/contextWindow";
 import {
   formatProviderSkillDisplayName,
-  getProviderSlashCommandsForSlashMenu,
   getProviderSkillsForSlashMenu,
   resolveProviderSkillsForCwd,
   resolveProviderSlashCommandsForCwd,
+  getProviderSlashCommandsForSlashMenu,
 } from "@t3tools/client-runtime/providerSkills";
 import { searchProviderSkills } from "../../providerSkillSearch";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { serverEnvironment } from "../../state/server";
 import type { ReviewCommentContext } from "../../reviewCommentContext";
+import { useEnvironmentQuery } from "../../state/query";
+
+function formatWorkspaceSkillCommandLabel(skill: ServerProviderSkill): string {
+  return `${formatProviderSkillDisplayName(skill)} (${skill.name})`;
+}
 
 const WORKSPACE_SNAPSHOT_RETRY_COOLDOWN_MS = 10_000;
 
@@ -1970,6 +1976,37 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       }
     }, retryLater);
   }, [environmentId, gitCwd, prompt, refreshProviders, selectedProviderEntry]);
+  const scopedProviderSkillsQuery = useEnvironmentQuery(
+    activeThread && selectedProviderEntry
+      ? serverEnvironment.providerSkills({
+          environmentId,
+          input: {
+            instanceId: selectedProviderEntry.instanceId,
+            projectId: activeThread.projectId,
+            threadId: activeThread.id,
+          },
+        })
+      : null,
+  );
+  // A newly created or stale client thread can briefly predate the server
+  // projection. In that case, retry without a thread id: the server still
+  // derives the cwd from the persisted project and therefore uses its root
+  // rather than accepting any client-provided path.
+  const projectProviderSkillsQuery = useEnvironmentQuery(
+    activeThread && selectedProviderEntry && scopedProviderSkillsQuery.error !== null
+      ? serverEnvironment.providerSkills({
+          environmentId,
+          input: {
+            instanceId: selectedProviderEntry.instanceId,
+            projectId: activeThread.projectId,
+          },
+        })
+      : null,
+  );
+  const selectedProviderSkills =
+    scopedProviderSkillsQuery.data?.skills ??
+    projectProviderSkillsQuery.data?.skills ??
+    workspaceSnapshotSkills;
   const selectedProviderModels = useMemo<ReadonlyArray<ServerProvider["models"][number]>>(
     () => selectedProviderEntry?.models ?? [],
     [selectedProviderEntry],
@@ -2343,10 +2380,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             ] as const)
           : []),
       ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
-      const slashMenuSkills = getProviderSkillsForSlashMenu(
-        selectedProviderSkills,
-        settings.showSkillsInSlashMenu,
-      );
+      // Workspace skills must remain selectable from `/` even when a global
+      // provider snapshot is empty or the slash-menu preference is off.
+      const slashMenuSkills = getProviderSkillsForSlashMenu(selectedProviderSkills, true);
       const providerSlashCommandItems = getProviderSlashCommandsForSlashMenu(
         selectedProviderSlashCommands,
         slashMenuSkills,
@@ -2381,16 +2417,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     }
     if (composerTrigger.kind === "skill") {
       return searchProviderSkills(selectedProviderSkills, composerTrigger.query).map((skill) => ({
-        id: `skill:${selectedProvider}:${skill.name}`,
-        type: "skill" as const,
-        provider: selectedProvider,
-        skill,
-        label: formatProviderSkillDisplayName(skill),
-        description:
-          skill.shortDescription ??
-          skill.description ??
-          (skill.scope ? `${skill.scope} skill` : "Run provider skill"),
-      }));
+          id: `skill:${selectedProvider}:${skill.name}`,
+          type: "skill" as const,
+          provider: selectedProvider,
+          skill,
+          label: formatWorkspaceSkillCommandLabel(skill),
+          description:
+            skill.shortDescription ??
+            skill.description ??
+            (skill.scope ? `${skill.scope} skill` : "Run provider skill"),
+        }));
     }
     if (
       composerTrigger.kind === "pull-request" &&
@@ -2456,8 +2492,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     selectedProvider,
     selectedProviderSkills,
     selectedProviderSlashCommands,
-    selectedProviderStatus,
-    settings.showSkillsInSlashMenu,
     workspaceEntries.entries,
   ]);
 
@@ -2536,7 +2570,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       (pullRequestLookup.isPending ||
         pullRequestTextQuery !== debouncedPullRequestTextQuery ||
         pullRequestTriggerNumber !== debouncedPullRequestNumber ||
-        exactPullRequestLookup.isPending));
+        exactPullRequestLookup.isPending)) ||
+    (composerTriggerKind === "skill" &&
+      (scopedProviderSkillsQuery.isPending || projectProviderSkillsQuery.isPending));
   const composerMenuEmptyState = useMemo(() => {
     if (composerTriggerKind === "skill") {
       return "No skills found. Try / to browse provider commands.";
@@ -3618,7 +3654,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         return;
       }
       if (item.type === "skill") {
-        const replacement = `$${item.skill.name} `;
+        const replacement =
+          item.provider === ProviderDriverKind.make("claudeAgent")
+            ? `/${item.skill.name} `
+            : `$${item.skill.name} `;
         const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
           snapshot.value,
           trigger.rangeEnd,

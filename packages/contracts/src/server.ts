@@ -124,6 +124,30 @@ export const ServerProviderWorkspaceSnapshot = Schema.Struct({
 export type ServerProviderWorkspaceSnapshot = typeof ServerProviderWorkspaceSnapshot.Type;
 
 /**
+ * A skill inventory is always resolved by the server from persisted project
+ * and thread state. Clients identify the provider instance and workspace
+ * record, never a filesystem path.
+ */
+export const ServerProviderSkillLookupInput = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  projectId: ProjectId,
+  threadId: Schema.optional(ThreadId),
+});
+export type ServerProviderSkillLookupInput = typeof ServerProviderSkillLookupInput.Type;
+
+export const ServerProviderSkillLookupResult = Schema.Struct({
+  skills: Schema.Array(ServerProviderSkill),
+});
+export type ServerProviderSkillLookupResult = typeof ServerProviderSkillLookupResult.Type;
+
+export class ServerProviderSkillLookupError extends Schema.TaggedErrorClass<ServerProviderSkillLookupError>()(
+  "ServerProviderSkillLookupError",
+  {
+    message: TrimmedNonEmptyString,
+  },
+) {}
+
+/**
  * Availability of a configured provider instance from the runtime's POV.
  *
  *  - `available` — the build ships this driver and an instance is wired

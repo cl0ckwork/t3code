@@ -5,7 +5,7 @@ import {
 } from "@t3tools/client-runtime/providerSkills";
 import {
   type ProjectEntry,
-  type ProviderDriverKind,
+  ProviderDriverKind,
   type PullRequestContextMetadata,
   type ServerProviderSkill,
   type ServerProviderSlashCommand,
@@ -24,6 +24,7 @@ import { type ComposerSlashCommand, type ComposerTriggerKind } from "../../compo
 import { cn } from "~/lib/utils";
 import { Badge } from "../ui/badge";
 import { Command, CommandGroup, CommandItem, CommandList } from "../ui/command";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { PierreEntryIcon } from "./PierreEntryIcon";
 import { ComposerBanner } from "./ComposerBanner";
 import { resolvePullRequestState } from "../pullRequest/pullRequestPresentation";
@@ -36,6 +37,7 @@ export type ComposerCommandItem =
       pathKind: ProjectEntry["kind"];
       label: string;
       description: string;
+      workspaceSkill?: true;
     }
   | {
       id: string;
@@ -103,6 +105,9 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
         className="flex min-h-0 w-full flex-col overflow-hidden pb-(--chat-composer-attachment-overlap) **:data-[slot=scroll-area-scrollbar]:data-[orientation=vertical]:my-4"
         data-composer-command-drawer="true"
       >
+        {props.isLoading && props.triggerKind === "skill" ? (
+          <p className="px-5 pt-3.5 text-secondary-label text-xs">Searching workspace skills...</p>
+        ) : null}
         {props.items.length > 0 ? (
           <CommandList className="max-h-72 min-h-0 scroll-pb-6">
             <CommandGroup>
@@ -156,6 +161,7 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
     props.triggerKind === "slash-command" && props.item.type === "skill" ? props.item.skill : null;
   const pullRequestPresentation =
     props.item.type === "pull-request" ? resolvePullRequestState(props.item.pullRequest) : null;
+  const tooltipText = autocompleteTooltipText(props.item);
 
   return (
     <CommandItem
@@ -200,9 +206,18 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
             props.item.label
           )}
         </span>
-        <span className="min-w-0 max-w-[48ch] flex-1 truncate text-left text-secondary-label text-xs">
-          {props.item.description}
-        </span>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <span className="min-w-0 max-w-[48ch] flex-1 truncate text-left text-secondary-label text-xs">
+                {props.item.description}
+              </span>
+            }
+          />
+          <TooltipPopup side="top" className="max-w-96 whitespace-pre-wrap leading-tight">
+            {tooltipText}
+          </TooltipPopup>
+        </Tooltip>
         {skillSourceKind ? (
           <SkillSourceBadge
             kind={skillSourceKind}
@@ -213,6 +228,18 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
     </CommandItem>
   );
 });
+
+function autocompleteTooltipText(item: ComposerCommandItem): string {
+  const detail = `${item.label}\n${item.description}`;
+  const workspaceSkillProvider = item.type === "skill" ? item.provider : null;
+  if (workspaceSkillProvider === ProviderDriverKind.make("codex")) {
+    return `${detail}\nSelect to attach this workspace skill natively to the Codex turn.`;
+  }
+  if (workspaceSkillProvider === ProviderDriverKind.make("claudeAgent")) {
+    return `${detail}\nSelect to run this workspace skill in Claude.`;
+  }
+  return detail;
+}
 
 const SKILL_SOURCE_ICON_BY_KIND: Record<ProviderSkillSourceKind, LucideIcon> = {
   app: BlocksIcon,

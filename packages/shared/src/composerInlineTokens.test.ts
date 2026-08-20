@@ -67,6 +67,22 @@ describe("collectComposerInlineTokens", () => {
     expect(collectComposerInlineTokens("Inspect @AGENTS.md")).toEqual([]);
   });
 
+  it("only converts known slash skills when a frontend opts in", () => {
+    expect(
+      collectComposerInlineTokens("Run /review then /plan ", {
+        knownSlashSkillNames: new Set(["review"]),
+      }),
+    ).toEqual([
+      {
+        type: "skill",
+        value: "review",
+        source: "/review",
+        start: 4,
+        end: 11,
+      },
+    ]);
+  });
+
   it("keeps the delimiter after a token outside its source range", () => {
     const text = "Inspect [package.json](package.json) next";
 

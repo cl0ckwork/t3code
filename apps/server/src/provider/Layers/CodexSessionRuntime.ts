@@ -191,10 +191,17 @@ export interface CodexSessionRuntimeOptions {
 
 export interface CodexSessionRuntimeSendTurnInput {
   readonly input?: string;
-  readonly attachments?: ReadonlyArray<{
-    readonly type: "localImage";
-    readonly path: string;
-  }>;
+  readonly attachments?: ReadonlyArray<
+    | {
+        readonly type: "localImage";
+        readonly path: string;
+      }
+    | {
+        readonly type: "skill";
+        readonly name: string;
+        readonly path: string;
+      }
+  >;
   readonly model?: string;
   readonly serviceTier?: CodexServiceTier | undefined;
   readonly effort?: EffectCodexSchema.V2TurnStartParams__ReasoningEffort | undefined;
@@ -622,10 +629,17 @@ export function buildTurnStartParams(input: {
   readonly threadId: string;
   readonly runtimeMode: RuntimeMode;
   readonly prompt?: string;
-  readonly attachments?: ReadonlyArray<{
-    readonly type: "localImage";
-    readonly path: string;
-  }>;
+  readonly attachments?: ReadonlyArray<
+    | {
+        readonly type: "localImage";
+        readonly path: string;
+      }
+    | {
+        readonly type: "skill";
+        readonly name: string;
+        readonly path: string;
+      }
+  >;
   readonly model?: string;
   /** Display name of `model`, for runtime info. */
   readonly modelName?: string;

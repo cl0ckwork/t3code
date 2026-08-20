@@ -289,6 +289,20 @@ describe("splitPromptIntoComposerSegments", () => {
     const prompt = "see [x](t3-context://v1/terminal/ctx 1) now";
     expect(splitPromptIntoComposerSegments(prompt)).toEqual([{ type: "text", text: prompt }]);
   });
+
+  it("renders a known slash skill as a chip while preserving its Claude source", () => {
+    expect(
+      splitPromptIntoComposerSegments(
+        "Use /review-follow-up please",
+        [],
+        new Set(["review-follow-up"]),
+      ),
+    ).toEqual([
+      { type: "text", text: "Use " },
+      { type: "skill", name: "review-follow-up", source: "/review-follow-up" },
+      { type: "text", text: " please" },
+    ]);
+  });
 });
 
 describe("selectionTouchesMentionBoundary", () => {

@@ -16,6 +16,12 @@ export type ComposerInlineToken =
 
 export interface CollectComposerInlineTokensOptions {
   readonly preserveTrailingFrom?: ReadonlyArray<ComposerInlineToken>;
+  /**
+   * Frontends may render known provider slash skills as inline chips. This is
+   * intentionally opt-in: server-side skill extraction remains `$`-only so a
+   * provider command such as `/plan` can never become a Codex skill input.
+   */
+  readonly knownSlashSkillNames?: ReadonlySet<string>;
 }
 
 /**
@@ -27,6 +33,7 @@ export interface CollectComposerInlineTokensOptions {
  */
 const SKILL_TOKEN_REGEX =
   /(^|\s)\p{Sc}(?![0-9][0-9_]*(?:[kKmMbBtT]|[eE][0-9]+)?(?:\s|$))(?=[a-zA-Z0-9:_-]*[a-zA-Z])([a-zA-Z0-9][a-zA-Z0-9:_-]*)(?=\s)/gu;
+const SLASH_SKILL_TOKEN_REGEX = /(^|\s)\/([a-zA-Z][a-zA-Z0-9:_-]*)(?=\s)/g;
 const MENTION_TOKEN_REGEX = /(^|\s)@(?:"((?:\\.|[^"\\])*)"|([^\s@"]+))(?=\s)/g;
 /**
  * The label body is bounded rather than `*`. Unbounded, every whitespace in
@@ -124,6 +131,27 @@ export function collectComposerInlineTokens(
       start,
       end,
     });
+  }
+
+  const knownSlashSkillNames = options.knownSlashSkillNames;
+  if (knownSlashSkillNames && knownSlashSkillNames.size > 0) {
+    for (const match of text.matchAll(SLASH_SKILL_TOKEN_REGEX)) {
+      const fullMatch = match[0];
+      const prefix = match[1] ?? "";
+      const value = match[2] ?? "";
+      if (!value || !knownSlashSkillNames.has(value)) {
+        continue;
+      }
+      const start = (match.index ?? 0) + prefix.length;
+      const end = start + fullMatch.length - prefix.length;
+      matches.push({
+        type: "skill",
+        value,
+        source: text.slice(start, end),
+        start,
+        end,
+      });
+    }
   }
 
   for (const token of options.preserveTrailingFrom ?? []) {

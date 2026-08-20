@@ -75,8 +75,13 @@ function forEachMentionMatch(
   });
 }
 
-export function collectComposerPromptInlineTokens(text: string) {
-  const tokens = collectComposerInlineTokens(text);
+export function collectComposerPromptInlineTokens(
+  text: string,
+  knownSlashSkillNames?: ReadonlySet<string>,
+) {
+  const tokens = knownSlashSkillNames
+    ? collectComposerInlineTokens(text, { knownSlashSkillNames })
+    : collectComposerInlineTokens(text);
   const citations = collectAssistantCitations(text);
   const references = collectComposerContextReferences(text);
   if (citations.length === 0 && references.length === 0) return tokens;
@@ -94,13 +99,16 @@ export function collectComposerPromptInlineTokens(text: string) {
   ].sort((left, right) => left.start - right.start);
 }
 
-function splitPromptTextIntoComposerSegments(text: string): ComposerPromptSegment[] {
+function splitPromptTextIntoComposerSegments(
+  text: string,
+  knownSlashSkillNames?: ReadonlySet<string>,
+): ComposerPromptSegment[] {
   const segments: ComposerPromptSegment[] = [];
   if (!text) {
     return segments;
   }
 
-  const tokenMatches = collectComposerPromptInlineTokens(text);
+  const tokenMatches = collectComposerPromptInlineTokens(text, knownSlashSkillNames);
   let cursor = 0;
   for (const match of tokenMatches) {
     if (match.start < cursor) {
@@ -175,6 +183,24 @@ export function selectionTouchesMentionBoundary(
   });
 }
 
-export function splitPromptIntoComposerSegments(prompt: string): ComposerPromptSegment[] {
-  return splitPromptTextIntoComposerSegments(prompt);
+export function splitPromptIntoComposerSegments(
+  prompt: string,
+  knownSlashSkillNames?: ReadonlySet<string>,
+): ComposerPromptSegment[] {
+  if (!prompt) {
+    return [];
+  }
+
+  const segments: ComposerPromptSegment[] = [];
+  forEachPromptSegmentSlice(prompt, (slice) => {
+    if (slice.type === "text") {
+      segments.push(...splitPromptTextIntoComposerSegments(slice.text, knownSlashSkillNames));
+      return false;
+    }
+
+    segments.push({ type: "terminal-context", context: null });
+    return false;
+  });
+
+  return segments;
 }

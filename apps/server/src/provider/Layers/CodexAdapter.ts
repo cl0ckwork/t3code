@@ -2585,6 +2585,11 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
       (attachment) => resolveAttachment(input, attachment),
       { concurrency: 1 },
     );
+    const codexSkills = (input.skills ?? []).map((skill) => ({
+      type: "skill" as const,
+      name: skill.name,
+      path: skill.path,
+    }));
 
     let session = yield* requireSession(input.threadId);
     if (options?.resolveRuntime) {
@@ -2629,7 +2634,9 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
           : {}),
         ...(serviceTier ? { serviceTier } : {}),
         ...(input.interactionMode !== undefined ? { interactionMode: input.interactionMode } : {}),
-        ...(codexAttachments.length > 0 ? { attachments: codexAttachments } : {}),
+        ...(codexAttachments.length + codexSkills.length > 0
+          ? { attachments: [...codexAttachments, ...codexSkills] }
+          : {}),
       })
       .pipe(Effect.mapError((cause) => mapCodexRuntimeError(input.threadId, "turn/start", cause)));
   });

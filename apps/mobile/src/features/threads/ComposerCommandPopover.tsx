@@ -44,6 +44,7 @@ export type ComposerCommandItem =
       readonly command: ServerProviderSlashCommand;
       readonly label: string;
       readonly description: string;
+      readonly workspaceSkill?: true;
     }
   | {
       readonly id: string;
@@ -191,6 +192,11 @@ export const ComposerCommandPopover = memo(function ComposerCommandPopover(
           <Text className="text-3xs font-t3-bold tracking-[0.8px] uppercase text-foreground-muted">
             {label}
           </Text>
+        </View>
+      ) : null}
+      {props.isLoading && props.triggerKind === "skill" ? (
+        <View className="px-3.5 pt-1 pb-2">
+          <Text className="text-xs text-foreground-tertiary">Searching workspace skills…</Text>
         </View>
       ) : null}
       {props.items.length > 0 ? (

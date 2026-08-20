@@ -109,6 +109,14 @@ export function detectComposerTrigger(
       rangeEnd: cursor,
     };
   const skillPrefix = /^\p{Sc}/u.exec(token);
+  if (token.startsWith("/")) {
+    return {
+      kind: "slash-command",
+      query: token.slice(1),
+      rangeStart: tokenStart,
+      rangeEnd: cursor,
+    };
+  }
   if (skillPrefix) {
     return {
       kind: "skill",

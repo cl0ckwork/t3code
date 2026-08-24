@@ -37,7 +37,6 @@ export type ComposerCommandItem =
       pathKind: ProjectEntry["kind"];
       label: string;
       description: string;
-      workspaceSkill?: true;
     }
   | {
       id: string;
@@ -53,6 +52,7 @@ export type ComposerCommandItem =
       command: ServerProviderSlashCommand;
       label: string;
       description: string;
+      workspaceSkill?: true;
     }
   | {
       id: string;

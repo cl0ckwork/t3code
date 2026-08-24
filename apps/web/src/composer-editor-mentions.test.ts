@@ -303,6 +303,12 @@ describe("splitPromptIntoComposerSegments", () => {
       { type: "text", text: " please" },
     ]);
   });
+
+  it("keeps slash commands as text unless the caller opts into slash skills", () => {
+    expect(splitPromptIntoComposerSegments("Run /simplify now")).toEqual([
+      { type: "text", text: "Run /simplify now" },
+    ]);
+  });
 });
 
 describe("selectionTouchesMentionBoundary", () => {

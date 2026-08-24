@@ -393,6 +393,7 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
         message: input.message,
         previousTitle: input.previousTitle,
         linkedContext: input.linkedContext,
+        relatedTitles: input.relatedTitles,
         attachments: input.attachments,
       });
 

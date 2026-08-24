@@ -246,6 +246,7 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
         message: input.message,
         previousTitle: input.previousTitle,
         linkedContext: input.linkedContext,
+        relatedTitles: input.relatedTitles,
         attachments: input.attachments,
       });
 

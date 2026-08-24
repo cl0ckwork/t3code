@@ -122,6 +122,7 @@ const turnStartKeyForEvent = (event: ProviderIntentEvent): string =>
 const HANDLED_TURN_START_KEY_MAX = 10_000;
 const HANDLED_TURN_START_KEY_TTL = Duration.minutes(30);
 const DEFAULT_RUNTIME_MODE: RuntimeMode = "full-access";
+const MAX_RELATED_THREAD_TITLES = 12;
 
 function explicitSkillNames(text: string): ReadonlyArray<string> {
   const completeTokens = collectComposerInlineTokens(`${text}\n`);
@@ -130,6 +131,30 @@ function explicitSkillNames(text: string): ReadonlyArray<string> {
   ];
 }
 
+function recentProjectThreadTitles(input: {
+  readonly currentThreadId: ThreadId;
+  readonly projectId: ProjectId;
+  readonly threads: ReadonlyArray<{
+    readonly id: ThreadId;
+    readonly projectId: ProjectId;
+    readonly title: string;
+    readonly updatedAt: string;
+  }>;
+}): ReadonlyArray<string> {
+  const titles = new Set<string>();
+  for (const thread of input.threads
+    .filter((thread) => thread.projectId === input.projectId && thread.id !== input.currentThreadId)
+    .toSorted((left, right) => right.updatedAt.localeCompare(left.updatedAt))) {
+    const title = thread.title.trim();
+    if (title && title !== DEFAULT_THREAD_TITLE) {
+      titles.add(title);
+    }
+    if (titles.size === MAX_RELATED_THREAD_TITLES) {
+      break;
+    }
+  }
+  return [...titles];
+}
 function providerErrorLabel(value: string | undefined): string {
   const normalized = value?.trim();
   return normalized && normalized.length > 0 ? normalized : "unknown";
@@ -532,6 +557,24 @@ const make = Effect.gen(function* () {
     return yield* projectionSnapshotQuery
       .getThreadDetailById(threadId, { activityKinds: [] })
       .pipe(Effect.map(Option.getOrUndefined));
+  });
+
+  const resolveRelatedThreadTitles = Effect.fnUntraced(function* (thread: {
+    readonly id: ThreadId;
+    readonly projectId: ProjectId;
+  }) {
+    return yield* projectionSnapshotQuery.getCommandReadModel().pipe(
+      Effect.map((readModel) =>
+        recentProjectThreadTitles({
+          currentThreadId: thread.id,
+          projectId: thread.projectId,
+          threads: readModel.threads,
+        }),
+      ),
+      // A title is optional enrichment. A transient snapshot read failure
+      // must not prevent the first turn from starting or being titled.
+      Effect.orElseSucceed(() => []),
+    );
   });
 
   const providerSkillLookup = yield* makeProviderSkillLookup({
@@ -1007,6 +1050,7 @@ const make = Effect.gen(function* () {
       readonly titleSeed?: string;
       readonly expectedTitle: string;
       readonly expectedVersion: CommandId | null;
+      readonly relatedTitles: ReadonlyArray<string>;
     }) {
       const attachments = input.attachments ?? [];
       yield* Effect.gen(function* () {
@@ -1018,6 +1062,7 @@ const make = Effect.gen(function* () {
           .generateThreadTitle({
             cwd: input.cwd,
             message: input.messageText,
+            relatedTitles: input.relatedTitles,
             ...(attachments.length > 0 ? { attachments } : {}),
             modelSelection,
           })
@@ -1116,6 +1161,7 @@ const make = Effect.gen(function* () {
       cwd,
       message,
       previousTitle,
+      relatedTitles: yield* resolveRelatedThreadTitles(thread),
       ...(attachments.length > 0 ? { attachments } : {}),
       modelSelection,
     });
@@ -1415,6 +1461,7 @@ const make = Effect.gen(function* () {
           expectedTitle: thread.title,
           expectedVersion: thread.titleState?.version ?? null,
           ...generationInput,
+          relatedTitles: yield* resolveRelatedThreadTitles(thread),
         }).pipe(Effect.forkScoped);
       }
     }

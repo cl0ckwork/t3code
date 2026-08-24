@@ -147,6 +147,19 @@ describe("buildBranchNamePrompt", () => {
     expect(result.prompt).toContain("image/png");
     expect(result.prompt).toContain("12345 bytes");
   });
+
+  it("uses recent project titles as bounded context without treating them as the subject", () => {
+    const result = buildThreadTitlePrompt({
+      message: "Fix project skill discovery",
+      relatedTitles: ["Workspace skills", "Codex structured skills", "Workspace skills"],
+    });
+
+    expect(result.prompt).toContain("Recent titles in this project (context only):");
+    expect(result.prompt).toContain("- Workspace skills");
+    expect(result.prompt).toContain("- Codex structured skills");
+    expect(result.prompt.match(/- Workspace skills/g)).toHaveLength(1);
+    expect(result.prompt).toContain("Do not let an unrelated title change the subject");
+  });
 });
 
 describe("buildThreadTitlePrompt", () => {

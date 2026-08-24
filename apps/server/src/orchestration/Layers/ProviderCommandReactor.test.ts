@@ -53,6 +53,7 @@ import {
   type ProviderServiceShape,
 } from "../../provider/Services/ProviderService.ts";
 import { ProviderAuthService } from "../../provider/Services/ProviderAuthService.ts";
+import { ProviderInstanceRegistry } from "../../provider/Services/ProviderInstanceRegistry.ts";
 import { makeProviderRegistryLayer } from "../../provider/testUtils/providerRegistryMock.ts";
 import { TextGeneration } from "../../textGeneration/TextGeneration.ts";
 import * as RepositoryIdentityResolver from "../../project/RepositoryIdentityResolver.ts";
@@ -465,6 +466,11 @@ describe("ProviderCommandReactor", () => {
       Layer.provideMerge(projectionSnapshotLayer),
       Layer.provideMerge(Layer.succeed(ProviderService, service)),
       Layer.provide(Layer.mock(ProviderAuthService, { tryHandlePromptCommand })),
+      Layer.provideMerge(
+        Layer.mock(ProviderInstanceRegistry)({
+          getInstance: () => Effect.succeed<undefined>(undefined),
+        }),
+      ),
       Layer.provideMerge(makeProviderRegistryLayer(providerSnapshots as never)),
       Layer.provideMerge(
         Layer.mock(GitWorkflowService.GitWorkflowService)({
@@ -1755,6 +1761,7 @@ describe("ProviderCommandReactor", () => {
     await waitFor(() => harness.generateThreadTitle.mock.calls.length === 1);
     expect(harness.generateThreadTitle.mock.calls[0]?.[0]).toMatchObject({
       message: "Please investigate reconnect failures after restarting the session.",
+      relatedTitles: [],
     });
 
     await waitFor(async () => {
@@ -1768,6 +1775,64 @@ describe("ProviderCommandReactor", () => {
     const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
     expect(thread?.title).toBe("Generated title");
     expect(attempts).toBe(2);
+  });
+
+  it("uses recent titles from the same project when generating a first-turn title", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+    const readModel = await harness.readModel();
+    const modelSelection = readModel.threads[0]?.modelSelection;
+    expect(modelSelection).toBeDefined();
+    harness.generateThreadTitle.mockReturnValue(Effect.succeed({ title: "Improve skill picker" }));
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("cmd-thread-create-title-context"),
+        threadId: ThreadId.make("thread-title-context"),
+        projectId: asProjectId("project-1"),
+        title: "Workspace skill discovery",
+        modelSelection: modelSelection!,
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        branch: null,
+        worktreePath: null,
+        createdAt: now,
+      }),
+    );
+
+    const titleSeed = "Improve the workspace skill picker";
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.meta.update",
+        commandId: CommandId.make("cmd-thread-title-context-seed"),
+        threadId: ThreadId.make("thread-1"),
+        title: titleSeed,
+      }),
+    );
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-title-context"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-title-context"),
+          role: "user",
+          text: "Improve the workspace skill picker.",
+          attachments: [],
+        },
+        titleSeed,
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.generateThreadTitle.mock.calls.length === 1);
+    expect(harness.generateThreadTitle.mock.calls[0]?.[0]).toMatchObject({
+      relatedTitles: ["Workspace skill discovery"],
+    });
   });
 
   it("regenerates a thread title from the current conversation", async () => {

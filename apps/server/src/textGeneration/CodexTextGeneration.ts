@@ -399,6 +399,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
         message: input.message,
         previousTitle: input.previousTitle,
         linkedContext: input.linkedContext,
+        relatedTitles: input.relatedTitles,
         attachments: input.attachments,
       });
 

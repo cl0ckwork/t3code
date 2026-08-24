@@ -213,6 +213,7 @@ export interface ThreadTitlePromptInput {
   linkedContext?: string | undefined;
   message: string;
   previousTitle?: string | undefined;
+  relatedTitles?: ReadonlyArray<string> | undefined;
   attachments?: ReadonlyArray<ChatAttachment> | undefined;
   policy?: TextGenerationPolicy | undefined;
 }
@@ -307,6 +308,17 @@ function threadTitlePromptSuffix(input: ThreadTitlePromptInput): string {
   }
   if (attachmentLines.length > 0) {
     suffix += `\n\nAttachment metadata:\n${limitSection(attachmentLines.join("\n"), 4_000)}`;
+  }
+  const relatedTitles = [...new Set(input.relatedTitles ?? [])]
+    .map((title) => title.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+  if (relatedTitles.length > 0) {
+    suffix += `\n\nRecent titles in this project (context only):\n${relatedTitles
+      .map((title) => `- ${title}`)
+      .join(
+        "\n",
+      )}\nUse them to preserve useful project vocabulary and avoid duplicate titles. Do not let an unrelated title change the subject of this request.`;
   }
   return suffix;
 }

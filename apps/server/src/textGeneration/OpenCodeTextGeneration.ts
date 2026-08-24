@@ -436,6 +436,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
         message: input.message,
         previousTitle: input.previousTitle,
         linkedContext: input.linkedContext,
+        relatedTitles: input.relatedTitles,
         attachments: input.attachments,
       });
       const generated = yield* runOpenCodeJson({

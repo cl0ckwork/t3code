@@ -67,6 +67,8 @@ export interface ThreadTitleGenerationInput {
   message: string;
   /** Present when replacing an existing title from the current thread history. */
   previousTitle?: string | undefined;
+  /** Recent titles from the same project, used only to preserve useful scope and avoid duplicates. */
+  relatedTitles?: ReadonlyArray<string> | undefined;
   attachments?: ReadonlyArray<ChatAttachment> | undefined;
   /** What model and provider to use for generation. */
   modelSelection: ModelSelection;

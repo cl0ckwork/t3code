@@ -199,6 +199,13 @@ describe("buildThreadTitlePrompt", () => {
     expect(result.prompt).toContain("User message:");
     expect(result.prompt).toContain("Investigate reconnect regressions after session restore");
     expect(result.prompt).not.toContain("Attachment metadata:");
+     expect(result.prompt).toContain(
+      "Generate a title that will help the user recognize this T3 Code thread weeks later.",
+    );
+    expect(result.prompt).toContain("Title format is mandatory:");
+    expect(result.prompt).toContain("Return exactly `kind:slug`");
+    expect(result.prompt).toContain("kind:TICKET-123/descriptive-slug");
+     expect(result.prompt).toContain("work:fix-workspace-skill-picker");
   });
 
   it("includes attachment metadata when attachments are provided", () => {
@@ -231,6 +238,13 @@ describe("buildThreadTitlePrompt", () => {
       "Regenerate the title for an existing T3 Code thread so the user can recognize it weeks later.",
     );
     expect(result.prompt).toContain('The previous title was "Investigate reconnect regressions".');
+     expect(result.prompt).toContain(
+      "Read the USER messages first. Identify the latest explicit durable goal.",
+    );
+    expect(result.prompt).toContain(
+      "Do not promote one assistant finding into the thread subject unless the user adopts it as a new goal.",
+    );
+     expect(result.prompt).toContain("review:subagent-monitoring-risks");
     expect(result.prompt).toContain("Thread contents:");
     expect(result.prompt).toContain("The remaining issue is stale session state");
   });

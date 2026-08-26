@@ -218,6 +218,15 @@ export interface ThreadTitlePromptInput {
   policy?: TextGenerationPolicy | undefined;
 }
 
+const THREAD_TITLE_FORMAT_RULES = `Title format is mandatory:
+- Return exactly \`kind:slug\` — never a sentence, title case, or a prose phrase.
+- \`kind\` is a short lower-case work type such as \`work\`, \`spec\`, \`research\`, \`spike\`, \`review\`, \`plan\`, \`present\`, or \`chore\`. Use \`work\` for implementation and bug-fix requests unless another kind is clearer.
+- \`slug\` is concise, lower-case, and hyphen-separated. Do not use spaces or filler words.
+- When the request explicitly names a Linear ticket, retain it as \`kind:TICKET-123/descriptive-slug\`. Do not invent ticket identifiers.
+- Preserve an established project taxonomy from the recent-title context, including useful qualifiers such as \`research(work)\`, when it makes the work type clearer.
+- Examples: \`work:fix-workspace-skill-picker\`, \`research:optimize-review-agents\`, \`spec:DAT-303/retailer-link-gtin-data\`.
+- Keep the underlying subject and outcome; omit incidental instructions, models, subagents, tools, output formats, branches, commits, CI, and monitoring unless they are the actual topic.`;
+
 // Keep shared editorial rules in these two prompts in sync. Regeneration
 // intentionally adds guidance for thread history and the previous title.
 const INITIAL_THREAD_TITLE_PROMPT = `Generate a title that will help the user recognize this T3 Code thread weeks later.
@@ -230,6 +239,8 @@ Before answering, silently reduce the request to:
 - Incidental instructions: What only describes how the agent should do the work?
 
 Title the subject and outcome. Discard incidental instructions.
+
+${THREAD_TITLE_FORMAT_RULES}
 
 Editorial rules:
 - 3-8 words, fewer than 40 characters.
@@ -258,13 +269,12 @@ Determine the title in this order:
 3. Compare that subject with the previous title. Preserve accurate scope words, especially when earlier content is truncated. Replace the previous title when it is generic, artifact-based, a completion update, or contradicted by the thread.
 4. Title the durable subject and desired outcome, not the current workflow state.
 
-Editorial rules:
-- 3-8 words, fewer than 40 characters.
-- Use a compact noun phrase or clear action phrase.
+${THREAD_TITLE_FORMAT_RULES}
+
+Subject rules:
 - Preserve the umbrella subject when later messages focus on one finding, provider, platform, or implementation detail.
 - A thread progressing through research, planning, implementation, review, CI, merge, and monitoring has usually not changed subjects.
 - Ignore deliverables and operations such as mocks, plans, HTML, branches, PRs, tests, CI, commits, merging, and monitoring unless they are the actual topic.
-- Models, subagents, tools, output formats, and monitoring instructions do not belong in the title unless they are themselves the topic.
 - Treat final operational follow-ups and assistant completion summaries as weak evidence of subject.
 - For reviews, name the reviewed feature or system and its durable concern, not one finding from the review.
 - For research, name the question domain rather than the research process.
@@ -278,9 +288,9 @@ Editorial rules:
 - Keep the previous title unchanged if it is already accurate. Otherwise return a meaningfully improved title, not a cosmetic paraphrase.
 
 Examples of the distinction:
-- A subagent-monitoring review that finds a Codex roster bug remains "Review Subagent Monitoring Risks," not "Codex Roster Bug Review."
-- A vague failing-test request later identified as a lazy thread-feed mismatch becomes "Fix Lazy Thread Feed Test," not "Prevent Mobile Feed Regressions."
-- A QR-sharing overhaul that ends with CI and merge work remains about QR sharing, not the PR lifecycle.`;
+- A subagent-monitoring review that finds a Codex roster bug remains \`review:subagent-monitoring-risks\`, not \`review:codex-roster-bug\`.
+- A vague failing-test request later identified as a lazy thread-feed mismatch becomes \`work:fix-lazy-thread-feed-test\`, not \`work:prevent-mobile-feed-regressions\`.
+- A QR-sharing overhaul that ends with CI and merge work remains \`work:qr-sharing-overhaul\`, not a PR-lifecycle title.`;
 }
 
 function preserveMessageEnd(message: string): string {
@@ -318,7 +328,7 @@ function threadTitlePromptSuffix(input: ThreadTitlePromptInput): string {
       .map((title) => `- ${title}`)
       .join(
         "\n",
-      )}\nUse them to preserve useful project vocabulary and avoid duplicate titles. Do not let an unrelated title change the subject of this request.`;
+      )}\nTreat these as the local naming convention. Follow their \`kind:slug\` shape, preserve useful project vocabulary and ticket style, and avoid duplicates. Do not let an unrelated title change the subject of this request.`;
   }
   return suffix;
 }

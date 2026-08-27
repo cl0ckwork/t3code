@@ -9,6 +9,7 @@ import type { ContextMenuItem } from "@t3tools/contracts";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
 import type { AsyncResult } from "effect/unstable/reactivity";
 import { planPinnedReorder } from "@t3tools/client-runtime/state/thread-sort";
+import type { SidebarThreadGrouping, SidebarThreadGroupOrder } from "@t3tools/contracts/settings";
 import {
   effectiveSnoozed,
   type ThreadSnoozeShell,
@@ -862,6 +863,109 @@ export function resolveSidebarThreadStatus(thread: SidebarThreadStatusInput): Si
   return "ready";
 }
 
+export interface SidebarThreadGroup<TThread> {
+  readonly key: string;
+  readonly label: string;
+  readonly threads: readonly TThread[];
+}
+
+export const SIDEBAR_THREAD_GROUPING_LABELS: Record<SidebarThreadGrouping, string> = {
+  none: "None",
+  workspace: "Workspace",
+  project: "Project",
+  branch: "Branch",
+  status: "Status",
+};
+
+export const SIDEBAR_THREAD_GROUP_ORDER_LABELS: Record<SidebarThreadGroupOrder, string> = {
+  recent_activity: "Recent activity",
+  name: "Name",
+};
+
+const SIDEBAR_THREAD_STATUS_GROUP_LABELS: Record<SidebarThreadStatus, string> = {
+  approval: "Needs approval",
+  input: "Needs input",
+  working: "Working",
+  monitoring: "Monitoring",
+  failed: "Failed",
+  ready: "Ready",
+};
+
+/**
+ * Assigns every session exactly one sidebar group. Callers supply project and
+ * workspace presentation because a shell intentionally only persists its
+ * project id and optional worktree path.
+ */
+export function groupSidebarThreads<
+  TThread extends Pick<
+    SidebarThreadSummary,
+    "environmentId" | "projectId" | "worktreePath" | "branch"
+  >,
+>(input: {
+  readonly grouping: SidebarThreadGrouping;
+  readonly groupOrder: SidebarThreadGroupOrder;
+  readonly threads: readonly TThread[];
+  readonly getProject: (
+    thread: TThread,
+  ) => { readonly title: string; readonly workspaceRoot: string } | null;
+  readonly getWorkspaceLabel: (worktreePath: string) => string;
+  readonly getStatus: (thread: TThread) => SidebarThreadStatus;
+}): readonly SidebarThreadGroup<TThread>[] {
+  if (input.grouping === "none") {
+    return [{ key: "all", label: "All sessions", threads: input.threads }];
+  }
+
+  const groups = new Map<string, { label: string; threads: TThread[] }>();
+  for (const thread of input.threads) {
+    const project = input.getProject(thread);
+    const projectKey = `${thread.environmentId}\u0000${thread.projectId}`;
+    const worktreePath = thread.worktreePath?.trim() || null;
+    const status = input.getStatus(thread);
+    const group = (() => {
+      switch (input.grouping) {
+        case "workspace": {
+          const workspacePath = worktreePath ?? project?.workspaceRoot ?? null;
+          const workspaceLabel = workspacePath
+            ? input.getWorkspaceLabel(workspacePath)
+            : "Unknown workspace";
+          return {
+            key: `workspace:${projectKey}\u0000${workspacePath ?? "unknown"}`,
+            label: worktreePath
+              ? workspaceLabel
+              : `Current checkout · ${project?.title ?? workspaceLabel}`,
+          };
+        }
+        case "project":
+          return { key: `project:${projectKey}`, label: project?.title ?? "Unknown project" };
+        case "branch":
+          return {
+            key: `branch:${projectKey}\u0000${thread.branch ?? "none"}`,
+            label: thread.branch ?? "No branch",
+          };
+        case "status":
+          return { key: `status:${status}`, label: SIDEBAR_THREAD_STATUS_GROUP_LABELS[status] };
+      }
+    })();
+    const existing = groups.get(group.key);
+    if (existing) {
+      existing.threads.push(thread);
+    } else {
+      groups.set(group.key, { label: group.label, threads: [thread] });
+    }
+  }
+
+  const result = [...groups.entries()].map(([key, group]) => ({ key, ...group }));
+  return input.groupOrder === "name"
+    ? result.toSorted((left, right) => left.label.localeCompare(right.label))
+    : result;
+}
+
+/** NaN-safe Date.parse for sort comparators: a malformed timestamp must not
+    poison the whole ordering, so it sinks to the epoch instead. */
+export function parseTimestampMs(isoDate: string): number {
+  const parsed = Date.parse(isoDate);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
 /** First VALID timestamp wins: `a ?? b` falls through on null, but a present-
     yet-malformed string must also fall through to the next candidate rather
     than sink the row to the epoch. */

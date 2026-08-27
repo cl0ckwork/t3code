@@ -538,8 +538,20 @@ describe("ClientSettings environment identification", () => {
 });
 
 describe("ClientSettings sidebar", () => {
-  it("defaults to the current sidebar", () => {
-    expect(decodeClientSettings({}).legacySidebarEnabled).toBe(false);
+  it("defaults to the current sidebar and session grouping preferences", () => {
+    const settings = decodeClientSettings({});
+    expect(settings.legacySidebarEnabled).toBe(false);
+    expect(settings.sidebarThreadGrouping).toBe("none");
+    expect(settings.sidebarThreadGroupOrder).toBe("recent_activity");
+  });
+
+  it("accepts supported session grouping preferences", () => {
+    expect(
+      decodeClientSettingsPatch({
+        sidebarThreadGrouping: "workspace",
+        sidebarThreadGroupOrder: "name",
+      }),
+    ).toMatchObject({ sidebarThreadGrouping: "workspace", sidebarThreadGroupOrder: "name" });
   });
 
   it("drops the retired sidebar v2 beta keys, resetting everyone to the default", () => {

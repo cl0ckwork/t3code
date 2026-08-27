@@ -59,6 +59,25 @@ export type SidebarThreadSortOrder = typeof SidebarThreadSortOrder.Type;
 // wire field keeps its decoding default below.
 const DEFAULT_SIDEBAR_THREAD_SORT_ORDER: SidebarThreadSortOrder = "updated_at";
 
+/**
+ * The sidebar can arrange each session under one deterministic context. This
+ * is deliberately a single-valued grouping rather than generic tags: every
+ * thread must have exactly one home in the list.
+ */
+export const SidebarThreadGrouping = Schema.Literals([
+  "none",
+  "workspace",
+  "project",
+  "branch",
+  "status",
+]);
+export type SidebarThreadGrouping = typeof SidebarThreadGrouping.Type;
+export const DEFAULT_SIDEBAR_THREAD_GROUPING: SidebarThreadGrouping = "none";
+
+export const SidebarThreadGroupOrder = Schema.Literals(["recent_activity", "name"]);
+export type SidebarThreadGroupOrder = typeof SidebarThreadGroupOrder.Type;
+export const DEFAULT_SIDEBAR_THREAD_GROUP_ORDER: SidebarThreadGroupOrder = "recent_activity";
+
 export const SidebarProjectGroupingMode = Schema.Literals([
   "repository",
   "repository_path",
@@ -478,6 +497,12 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   sidebarThreadSortOrder: SidebarThreadSortOrder.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_THREAD_SORT_ORDER)),
+  ),
+  sidebarThreadGrouping: SidebarThreadGrouping.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_THREAD_GROUPING)),
+  ),
+  sidebarThreadGroupOrder: SidebarThreadGroupOrder.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_THREAD_GROUP_ORDER)),
   ),
   sidebarThreadPreviewCount: SidebarThreadPreviewCount.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT)),
@@ -1869,6 +1894,8 @@ export const ClientSettingsPatch = Schema.Struct({
   ),
   sidebarProjectSortOrder: Schema.optionalKey(SidebarProjectSortOrder),
   sidebarThreadSortOrder: Schema.optionalKey(SidebarThreadSortOrder),
+  sidebarThreadGrouping: Schema.optionalKey(SidebarThreadGrouping),
+  sidebarThreadGroupOrder: Schema.optionalKey(SidebarThreadGroupOrder),
   sidebarThreadPreviewCount: Schema.optionalKey(SidebarThreadPreviewCount),
   timestampFormat: Schema.optionalKey(TimestampFormat),
   snapShotEnabled: Schema.optionalKey(Schema.Boolean),

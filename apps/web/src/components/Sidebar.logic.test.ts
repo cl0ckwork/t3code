@@ -30,6 +30,8 @@ import {
   resolveWorkingStartedAt,
   searchSidebarThreads,
   formatWorkingDurationLabel,
+  groupSidebarThreads,
+  SIDEBAR_THREAD_GROUPING_LABELS,
   shouldClearThreadSelectionOnMouseDown,
   shouldRecedeSidebarThread,
   sortLogicalProjectsForSidebar,
@@ -97,6 +99,60 @@ describe("resolveSidebarRowAccessibility", () => {
   ])("leads with the title without folding row actions into its name: %j", (input) => {
     const { expected, ...state } = input;
     expect(resolveSidebarRowAccessibility(state)).toEqual(expected);
+  });
+});
+
+describe("groupSidebarThreads", () => {
+  const project = { title: "Pogo", workspaceRoot: "/code/pogo" };
+  type GroupableThread = Pick<Thread, "environmentId" | "projectId" | "worktreePath" | "branch">;
+  const thread = (overrides: Partial<GroupableThread> = {}): GroupableThread => ({
+    environmentId: localEnvironmentId,
+    projectId: ProjectId.make("pogo"),
+    worktreePath: null,
+    branch: "main",
+    ...overrides,
+  });
+  const group = (
+    grouping: Parameters<typeof groupSidebarThreads>[0]["grouping"],
+    groupOrder: "recent_activity" | "name" = "name",
+  ) =>
+    groupSidebarThreads({
+      grouping,
+      groupOrder,
+      threads: [
+        thread({ worktreePath: "/code/pogo/.t3/worktrees/feature-a", branch: "zeta" }),
+        thread({ branch: "main" }),
+      ],
+      getProject: () => project,
+      getWorkspaceLabel: (path) => path.split("/").at(-1) ?? path,
+      getStatus: (candidate) => (candidate.branch === "main" ? "ready" : "working"),
+    });
+
+  it("keeps every thread in one workspace group", () => {
+    expect(group("workspace")).toEqual([
+      expect.objectContaining({ label: "Current checkout · Pogo" }),
+      expect.objectContaining({ label: "feature-a" }),
+    ]);
+  });
+
+  it("supports project, branch, and runtime-status dimensions", () => {
+    expect(group("project")).toEqual([
+      expect.objectContaining({ label: "Pogo", threads: expect.any(Array) }),
+    ]);
+    expect(group("branch").map((entry) => entry.label)).toEqual(["main", "zeta"]);
+    expect(group("status").map((entry) => entry.label)).toEqual(["Ready", "Working"]);
+    expect(SIDEBAR_THREAD_GROUPING_LABELS).toMatchObject({
+      workspace: "Workspace",
+      status: "Status",
+    });
+  });
+
+  it("keeps recent group order or sorts groups by name on request", () => {
+    expect(group("branch", "recent_activity").map((entry) => entry.label)).toEqual([
+      "zeta",
+      "main",
+    ]);
+    expect(group("branch", "name").map((entry) => entry.label)).toEqual(["main", "zeta"]);
   });
 });
 

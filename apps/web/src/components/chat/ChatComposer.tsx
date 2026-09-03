@@ -6834,6 +6834,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     buildContextClipboardFragment={buildContextClipboardFragment}
                     importContextFragment={importContextFragment}
                     skills={selectedProviderSkills}
+                    renderSlashSkillChips={selectedProvider === "claudeAgent"}
                     containerClassName={cn(isComposerResting && "min-w-0 flex-1")}
                     className={cn(
                       showMobilePendingAnswerActions && "max-sm:pb-11",

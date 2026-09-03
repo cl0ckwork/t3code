@@ -1011,14 +1011,6 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:provider:install-remove",
       tag: WS_METHODS.providerInstallRemove,
     }),
-    providerSkills: createEnvironmentRpcQueryAtomFamily(runtime, {
-      label: "environment-data:server:provider-skills",
-      tag: WS_METHODS.serverListProviderSkills,
-      // Scoped inventories are server-cached by workspace and can change on
-      // disk without a provider snapshot refresh. Keep the client cache short
-      // so reopening the picker observes those changes promptly.
-      staleTimeMs: 10_000,
-    }),
     traceDiagnostics: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:server:trace-diagnostics",
       tag: WS_METHODS.serverGetTraceDiagnostics,

@@ -461,8 +461,6 @@ export function NewTaskDraftScreen(props: {
       ? (selectedProject?.id ?? null)
       : null,
     pullRequestRepository: selectedProject?.repositoryIdentity?.displayName ?? null,
-    projectId: selectedProject?.id ?? null,
-    threadId: null,
     projectCwd:
       (flow.workspaceMode === "worktree"
         ? selectedProject?.workspaceRoot

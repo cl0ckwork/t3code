@@ -345,13 +345,6 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         snapshot,
         invalidateCaches: Cache.invalidateAll(capabilitiesProbeCache),
         snapshotForCwd,
-        skills: {
-          list: (workspaceCwd) =>
-            discoverClaudeSkills(effectiveConfig, workspaceCwd, processEnv).pipe(
-              Effect.provideService(FileSystem.FileSystem, fileSystem),
-              Effect.provideService(Path.Path, path),
-            ),
-        },
         adapter,
         textGeneration,
         consumeResetCredit,

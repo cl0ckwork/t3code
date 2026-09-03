@@ -989,7 +989,6 @@ import { usePanelAnimationSettings } from "../../panelAnimations";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { serverEnvironment } from "../../state/server";
 import type { ReviewCommentContext } from "../../reviewCommentContext";
-import { useEnvironmentQuery } from "../../state/query";
 
 function formatWorkspaceSkillCommandLabel(skill: ServerProviderSkill): string {
   return `${formatProviderSkillDisplayName(skill)} (${skill.name})`;
@@ -1971,6 +1970,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const workspaceRefreshKeyRef = useRef<string | null>(null);
   const workspaceRefreshRetryRef = useRef<{ key: string; notBefore: number } | null>(null);
   const hadWorkspaceSnapshotRef = useRef(false);
+  const [workspaceSkillsLoading, setWorkspaceSkillsLoading] = useState(false);
   useEffect(() => {
     const hasWorkspaceSnapshot = Boolean(
       gitCwd &&
@@ -1983,7 +1983,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     hadWorkspaceSnapshotRef.current = hasWorkspaceSnapshot;
   }, [gitCwd, selectedProviderStatus]);
   useEffect(() => {
-    if (!gitCwd || !selectedProviderEntry) return;
+    if (!gitCwd || !selectedProviderEntry) {
+      setWorkspaceSkillsLoading(false);
+      return;
+    }
     const key = `${environmentId}:${selectedProviderEntry.instanceId}:${gitCwd}`;
     const hasWorkspaceSnapshot = selectedProviderStatus?.workspaceSnapshots?.some(
       (snapshot) => snapshot.cwd === gitCwd,
@@ -1992,11 +1995,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     if (hasWorkspaceSnapshot) {
       workspaceRefreshKeyRef.current = key;
       workspaceRefreshRetryRef.current = null;
+      setWorkspaceSkillsLoading(false);
       return;
     }
     const retry = workspaceRefreshRetryRef.current;
     if (retry?.key === key && Date.now() < retry.notBefore) return;
     workspaceRefreshKeyRef.current = key;
+    setWorkspaceSkillsLoading(true);
     const retryLater = () => {
       if (workspaceRefreshKeyRef.current !== key) return;
       workspaceRefreshKeyRef.current = null;
@@ -2008,48 +2013,25 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     void refreshProviders({
       environmentId,
       input: { instanceId: selectedProviderEntry.instanceId, cwd: gitCwd },
-    }).then((result) => {
-      const hasWorkspaceSnapshot =
-        result._tag === "Success" &&
-        result.value.providers
-          .find((provider) => provider.instanceId === selectedProviderEntry.instanceId)
-          ?.workspaceSnapshots?.some((snapshot) => snapshot.cwd === gitCwd);
-      if (!hasWorkspaceSnapshot && workspaceRefreshKeyRef.current === key) {
+    }).then(
+      (result) => {
+        const hasWorkspaceSnapshot =
+          result._tag === "Success" &&
+          result.value.providers
+            .find((provider) => provider.instanceId === selectedProviderEntry.instanceId)
+            ?.workspaceSnapshots?.some((snapshot) => snapshot.cwd === gitCwd);
+        if (!hasWorkspaceSnapshot && workspaceRefreshKeyRef.current === key) {
+          retryLater();
+        }
+        setWorkspaceSkillsLoading(false);
+      },
+      () => {
         retryLater();
-      }
-    }, retryLater);
+        setWorkspaceSkillsLoading(false);
+      },
+    );
   }, [environmentId, gitCwd, prompt, refreshProviders, selectedProviderEntry]);
-  const scopedProviderSkillsQuery = useEnvironmentQuery(
-    activeThread && selectedProviderEntry
-      ? serverEnvironment.providerSkills({
-          environmentId,
-          input: {
-            instanceId: selectedProviderEntry.instanceId,
-            projectId: activeThread.projectId,
-            threadId: activeThread.id,
-          },
-        })
-      : null,
-  );
-  // A newly created or stale client thread can briefly predate the server
-  // projection. In that case, retry without a thread id: the server still
-  // derives the cwd from the persisted project and therefore uses its root
-  // rather than accepting any client-provided path.
-  const projectProviderSkillsQuery = useEnvironmentQuery(
-    activeThread && selectedProviderEntry && scopedProviderSkillsQuery.error !== null
-      ? serverEnvironment.providerSkills({
-          environmentId,
-          input: {
-            instanceId: selectedProviderEntry.instanceId,
-            projectId: activeThread.projectId,
-          },
-        })
-      : null,
-  );
-  const selectedProviderSkills =
-    scopedProviderSkillsQuery.data?.skills ??
-    projectProviderSkillsQuery.data?.skills ??
-    workspaceSnapshotSkills;
+  const selectedProviderSkills = workspaceSnapshotSkills;
   const selectedProviderModels = useMemo<ReadonlyArray<ServerProvider["models"][number]>>(
     () => selectedProviderEntry?.models ?? [],
     [selectedProviderEntry],
@@ -2463,16 +2445,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     }
     if (composerTrigger.kind === "skill") {
       return searchProviderSkills(selectedProviderSkills, composerTrigger.query).map((skill) => ({
-          id: `skill:${selectedProvider}:${skill.name}`,
-          type: "skill" as const,
-          provider: selectedProvider,
-          skill,
-          label: formatWorkspaceSkillCommandLabel(skill),
-          description:
-            skill.shortDescription ??
-            skill.description ??
-            (skill.scope ? `${skill.scope} skill` : "Run provider skill"),
-        }));
+        id: `skill:${selectedProvider}:${skill.name}`,
+        type: "skill" as const,
+        provider: selectedProvider,
+        skill,
+        label: formatWorkspaceSkillCommandLabel(skill),
+        description:
+          skill.shortDescription ??
+          skill.description ??
+          (skill.scope ? `${skill.scope} skill` : "Run provider skill"),
+      }));
     }
     if (
       composerTrigger.kind === "pull-request" &&
@@ -2619,8 +2601,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         pullRequestTextQuery !== debouncedPullRequestTextQuery ||
         pullRequestTriggerNumber !== debouncedPullRequestNumber ||
         exactPullRequestLookup.isPending)) ||
-    (composerTriggerKind === "skill" &&
-      (scopedProviderSkillsQuery.isPending || projectProviderSkillsQuery.isPending));
+    (composerTriggerKind === "skill" && workspaceSkillsLoading);
   const composerMenuEmptyState = useMemo(() => {
     if (composerTriggerKind === "skill") {
       return "No skills found. Try / to browse provider commands.";

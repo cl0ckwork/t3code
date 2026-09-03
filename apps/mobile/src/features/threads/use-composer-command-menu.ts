@@ -3,7 +3,6 @@ import type {
   ProjectId,
   ProviderInteractionMode,
   ServerProvider,
-  ThreadId,
 } from "@t3tools/contracts";
 import { COMPOSER_CONTEXT_MAX_RECORDS } from "@t3tools/contracts";
 import { Alert } from "react-native";
@@ -41,7 +40,6 @@ import type { ComposerEditorSelection } from "../../components/ComposerEditor";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useComposerPathSearch, useComposerPullRequestSearch } from "../../state/queries";
-import { useEnvironmentQuery } from "../../state/query";
 import type { ComposerCommandItem } from "./ComposerCommandPopover";
 import { matchesSlashSkillQuery } from "./composerSlashSkillSearch";
 
@@ -167,8 +165,6 @@ export function useComposerCommandMenu({
   draftMessage,
   ownerKey,
   environmentId,
-  projectId,
-  threadId,
   projectCwd,
   pullRequestProjectId = null,
   pullRequestRepository = null,
@@ -184,8 +180,6 @@ export function useComposerCommandMenu({
   readonly draftMessage: string;
   readonly ownerKey: string | null;
   readonly environmentId: EnvironmentId | null;
-  readonly projectId: ProjectId | null;
-  readonly threadId: ThreadId | null;
   readonly projectCwd: string | null;
   readonly pullRequestProjectId?: ProjectId | null;
   readonly pullRequestRepository?: string | null;
@@ -200,32 +194,6 @@ export function useComposerCommandMenu({
   /** Picking /usage-limits is the action itself; the draft keeps nothing of it. */
   readonly onUsageLimits?: () => void;
 }) {
-  const scopedProviderSkillsQuery = useEnvironmentQuery(
-    environmentId !== null && selectedProviderStatus !== null && projectId !== null
-      ? serverEnvironment.providerSkills({
-          environmentId,
-          input: {
-            instanceId: selectedProviderStatus.instanceId,
-            projectId,
-            ...(threadId !== null ? { threadId } : {}),
-          },
-        })
-      : null,
-  );
-  const projectProviderSkillsQuery = useEnvironmentQuery(
-    environmentId !== null &&
-    selectedProviderStatus !== null &&
-    projectId !== null &&
-    scopedProviderSkillsQuery.error !== null
-      ? serverEnvironment.providerSkills({
-          environmentId,
-          input: {
-            instanceId: selectedProviderStatus.instanceId,
-            projectId,
-          },
-        })
-      : null,
-  );
   const [selection, setSelection] = useState(() => composerSelectionAtEnd(draftMessage));
   const previousOwnerKeyRef = useRef(ownerKey);
   const onSelectionChange = useCallback((nextSelection: ComposerEditorSelection) => {
@@ -263,11 +231,7 @@ export function useComposerCommandMenu({
       selectedProviderStatus ? resolveProviderSkillsForCwd(selectedProviderStatus, projectCwd) : [],
     [projectCwd, selectedProviderStatus],
   );
-  // A provider snapshot is global-only. Prefer the server-resolved workspace
-  // inventory whenever it succeeds, so a newly opened project cannot inherit
-  // skills from the launch directory or another worktree.
-  const selectedProviderSkills =
-    scopedProviderSkillsQuery.data?.skills ?? projectProviderSkillsQuery.data?.skills ?? skills;
+  const selectedProviderSkills = skills;
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
   });
@@ -279,6 +243,7 @@ export function useComposerCommandMenu({
   const workspaceRefreshKeyRef = useRef<string | null>(null);
   const workspaceRefreshRetryRef = useRef<{ key: string; notBefore: number } | null>(null);
   const hadWorkspaceSnapshotRef = useRef(false);
+  const [workspaceSkillsLoading, setWorkspaceSkillsLoading] = useState(false);
   useEffect(() => {
     if (hadWorkspaceSnapshotRef.current && !hasWorkspaceSnapshot) {
       workspaceRefreshKeyRef.current = null;
@@ -287,17 +252,22 @@ export function useComposerCommandMenu({
     hadWorkspaceSnapshotRef.current = hasWorkspaceSnapshot;
   }, [hasWorkspaceSnapshot]);
   useEffect(() => {
-    if (!environmentId || !projectCwd || !selectedProviderInstanceId) return;
+    if (!environmentId || !projectCwd || !selectedProviderInstanceId) {
+      setWorkspaceSkillsLoading(false);
+      return;
+    }
     const key = `${environmentId}:${selectedProviderInstanceId}:${projectCwd}`;
     if (workspaceRefreshKeyRef.current === key) return;
     if (hasWorkspaceSnapshot) {
       workspaceRefreshKeyRef.current = key;
       workspaceRefreshRetryRef.current = null;
+      setWorkspaceSkillsLoading(false);
       return;
     }
     const retry = workspaceRefreshRetryRef.current;
     if (retry?.key === key && Date.now() < retry.notBefore) return;
     workspaceRefreshKeyRef.current = key;
+    setWorkspaceSkillsLoading(true);
     const retryLater = () => {
       if (workspaceRefreshKeyRef.current !== key) return;
       workspaceRefreshKeyRef.current = null;
@@ -309,16 +279,23 @@ export function useComposerCommandMenu({
     void refreshProviders({
       environmentId,
       input: { instanceId: selectedProviderInstanceId, cwd: projectCwd },
-    }).then((result) => {
-      const refreshed =
-        result._tag === "Success" &&
-        result.value.providers
-          .find((provider) => provider.instanceId === selectedProviderInstanceId)
-          ?.workspaceSnapshots?.some((snapshot) => snapshot.cwd === projectCwd);
-      if (!refreshed && workspaceRefreshKeyRef.current === key) {
+    }).then(
+      (result) => {
+        const refreshed =
+          result._tag === "Success" &&
+          result.value.providers
+            .find((provider) => provider.instanceId === selectedProviderInstanceId)
+            ?.workspaceSnapshots?.some((snapshot) => snapshot.cwd === projectCwd);
+        if (!refreshed && workspaceRefreshKeyRef.current === key) {
+          retryLater();
+        }
+        setWorkspaceSkillsLoading(false);
+      },
+      () => {
         retryLater();
-      }
-    }, retryLater);
+        setWorkspaceSkillsLoading(false);
+      },
+    );
   }, [
     draftMessage,
     environmentId,
@@ -602,10 +579,10 @@ export function useComposerCommandMenu({
     trigger,
     items,
     skills: selectedProviderSkills,
-    isLoading: pathSearch.isPending ||
+    isLoading:
+      pathSearch.isPending ||
       (trigger?.kind === "pull-request" && pullRequestSearch.isPending) ||
-      (trigger?.kind === "skill" &&
-        (scopedProviderSkillsQuery.isPending || projectProviderSkillsQuery.isPending)),
+      (trigger?.kind === "skill" && workspaceSkillsLoading),
     error:
       trigger?.kind === "pull-request"
         ? pullRequestProjectId === null || pullRequestRepository === null

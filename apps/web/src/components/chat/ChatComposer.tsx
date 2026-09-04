@@ -1988,7 +1988,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       },
     );
   }, [environmentId, gitCwd, prompt, refreshProviders, selectedProviderEntry]);
-  const selectedProviderSkills = workspaceSnapshotSkills;
   const selectedProviderModels = useMemo<ReadonlyArray<ServerProvider["models"][number]>>(
     () => selectedProviderEntry?.models ?? [],
     [selectedProviderEntry],

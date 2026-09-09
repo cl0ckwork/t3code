@@ -59,10 +59,12 @@ import {
 
 import type { TimestampFormat } from "@t3tools/contracts/settings";
 import {
+  ArrowDownUpIcon,
   AlarmClockIcon,
   AlarmClockOffIcon,
   ArrowRightLeftIcon,
   CheckIcon,
+  ChevronDownIcon,
   CircleAlertIcon,
   CircleCheckIcon,
   CircleDashedIcon,
@@ -70,6 +72,7 @@ import {
   EyeIcon,
   FolderIcon,
   GitBranchIcon,
+  ListFilterIcon,
   MessageCircleQuestionIcon,
   PinIcon,
   PinOffIcon,
@@ -137,7 +140,7 @@ import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useTerminalFocus } from "../hooks/useTerminalFocus";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
-import { useClientSettings } from "../hooks/useSettings";
+import { useClientSettings, useUpdateClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
@@ -181,6 +184,7 @@ import {
   filterSidebarProjectScopeItems,
   formatWorkingDurationLabel,
   firstValidTimestampMs,
+  groupSidebarThreads,
   hasUnseenCompletion,
   isSidebarNestedLinkClick,
   isSidebarThreadWorking,
@@ -211,6 +215,8 @@ import {
   sortThreadsForSidebar,
   sortWorkingThreadsBySend,
   useThreadJumpHintVisibility,
+  SIDEBAR_THREAD_GROUPING_LABELS,
+  SIDEBAR_THREAD_GROUP_ORDER_LABELS,
   useRetainedValue,
   useSidebarRowSubscriptionLease,
   type SidebarListItem,
@@ -264,6 +270,7 @@ import {
   useComboboxFilter,
 } from "./ui/combobox";
 import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
+import { Menu, MenuPopup, MenuRadioGroup, MenuRadioItem, MenuTrigger } from "./ui/menu";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuShortcut, MenuTrigger } from "./ui/menu";
@@ -2332,6 +2339,9 @@ export default function Sidebar() {
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
   const sidebarProjectSortOrder = useClientSettings((s) => s.sidebarProjectSortOrder);
+  const sidebarThreadGrouping = useClientSettings((s) => s.sidebarThreadGrouping);
+  const sidebarThreadGroupOrder = useClientSettings((s) => s.sidebarThreadGroupOrder);
+  const updateClientSettings = useUpdateClientSettings();
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const workingShelfEnabled = useClientSettings((s) => s.sidebarWorkingShelfEnabled);
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
@@ -3547,6 +3557,38 @@ export default function Sidebar() {
     },
     [attemptUnsettle, attemptUnsnooze, serverConfigs, settleThreads],
   );
+  const groupedThreadLists = useMemo(() => {
+    const group = (threads: readonly EnvironmentThreadShell[]) =>
+      groupSidebarThreads({
+        grouping: sidebarThreadGrouping,
+        groupOrder: sidebarThreadGroupOrder,
+        threads,
+        getProject: (thread) => {
+          const project = projectByKey.get(`${thread.environmentId}:${thread.projectId}`);
+          return project ? { title: project.title, workspaceRoot: project.workspaceRoot } : null;
+        },
+        getWorkspaceLabel: (path) => path.split("/").filter(Boolean).at(-1) ?? path,
+        getStatus: resolveSidebarThreadStatus,
+      });
+    return {
+      active: group([
+        ...pinnedThreads,
+        ...activeThreads,
+        ...visibleWorkingThreads,
+        ...visibleSnoozedThreads,
+      ]),
+      settled: group(renderedSettledThreads),
+    };
+  }, [
+    activeThreads,
+    pinnedThreads,
+    projectByKey,
+    renderedSettledThreads,
+    sidebarThreadGrouping,
+    sidebarThreadGroupOrder,
+    visibleSnoozedThreads,
+    visibleWorkingThreads,
+  ]);
   const pinnedKeys = useMemo(
     () =>
       pinnedThreads.map((thread) =>
@@ -4970,6 +5012,81 @@ export default function Sidebar() {
                   </ComboboxPopup>
                 </Combobox>
               }
+              controls={
+                <>
+                  <Menu>
+                    <MenuTrigger
+                      render={
+                        <SidebarHeaderIconButton label="Group sidebar sessions" />
+                      }
+                    >
+                      <ListFilterIcon />
+                    </MenuTrigger>
+                    <MenuPopup align="end" className="min-w-44">
+                      <MenuRadioGroup
+                        value={sidebarThreadGrouping}
+                        onValueChange={(value) => {
+                          if (
+                            value === "none" ||
+                            value === "workspace" ||
+                            value === "project" ||
+                            value === "branch" ||
+                            value === "status"
+                          ) {
+                            updateClientSettings({ sidebarThreadGrouping: value });
+                          }
+                        }}
+                      >
+                        {(
+                          Object.entries(SIDEBAR_THREAD_GROUPING_LABELS) as Array<
+                            [typeof sidebarThreadGrouping, string]
+                          >
+                        ).map(([value, label]) => (
+                          <MenuRadioItem key={value} value={value} closeOnClick>
+                            {label}
+                          </MenuRadioItem>
+                        ))}
+                      </MenuRadioGroup>
+                    </MenuPopup>
+                  </Menu>
+                  <Menu>
+                    <MenuTrigger
+                      render={
+                        <SidebarHeaderIconButton
+                          label={
+                            sidebarThreadGrouping === "none"
+                              ? "Choose a session grouping first"
+                              : "Order sidebar groups"
+                          }
+                          disabled={sidebarThreadGrouping === "none"}
+                        />
+                      }
+                    >
+                      <ArrowDownUpIcon />
+                    </MenuTrigger>
+                    <MenuPopup align="end" className="min-w-44">
+                      <MenuRadioGroup
+                        value={sidebarThreadGroupOrder}
+                        onValueChange={(value) => {
+                          if (value === "recent_activity" || value === "name") {
+                            updateClientSettings({ sidebarThreadGroupOrder: value });
+                          }
+                        }}
+                      >
+                        {(
+                          Object.entries(SIDEBAR_THREAD_GROUP_ORDER_LABELS) as Array<
+                            [typeof sidebarThreadGroupOrder, string]
+                          >
+                        ).map(([value, label]) => (
+                          <MenuRadioItem key={value} value={value} closeOnClick>
+                            {label}
+                          </MenuRadioItem>
+                        ))}
+                      </MenuRadioGroup>
+                    </MenuPopup>
+                  </Menu>
+                </>
+              }
               onNewProject={openAddProjectCommandPalette}
               onNewThread={handleNewThreadClick}
               newThreadDisabled={projects.length === 0}
@@ -5239,6 +5356,82 @@ export default function Sidebar() {
                           </SortableThreadRow>
                         );
                       };
+                      if (sidebarThreadGrouping !== "none") {
+                        const groupedItems: ReactNode[] = [
+                          <SidebarDraftBlock
+                            key="draft-sessions"
+                            projectByKey={projectByKey}
+                            projectDisplayNameByKey={projectDisplayNameByKey}
+                            scopedProjectKeys={scopedProjectKeys}
+                            routeDraftId={routeDraftIdForRows}
+                            onNavigateToDraft={navigateToDraft}
+                          />,
+                        ];
+                        const appendGroups = (
+                          groups: typeof groupedThreadLists.active,
+                          lifecycle: "active" | "settled",
+                        ) => {
+                          for (const group of groups) {
+                            groupedItems.push(
+                              <li
+                                key={`thread-group:${lifecycle}:${group.key}`}
+                                data-thread-selection-safe
+                                className="mb-1 mt-3 flex items-center gap-2 px-2.5"
+                              >
+                                <span className="min-w-0 truncate text-xs font-medium text-sidebar-muted-foreground">
+                                  {group.label}
+                                </span>
+                                <span className="h-px flex-1 bg-sidebar-border/60" />
+                                <span className="text-[10px] tabular-nums text-sidebar-muted-foreground/60">
+                                  {group.threads.length}
+                                </span>
+                              </li>,
+                            );
+                            for (const thread of group.threads) {
+                              const threadKey = scopedThreadKey(
+                                scopeThreadRef(thread.environmentId, thread.id),
+                              );
+                              const section = sectionByThreadKey.get(threadKey);
+                              if (section !== undefined) {
+                                groupedItems.push(renderThreadRow(thread, section));
+                              }
+                            }
+                          }
+                        };
+                        appendGroups(groupedThreadLists.active, "active");
+                        if (settledThreads.length > 0) {
+                          groupedItems.push(
+                            <li
+                              key="grouped-settled-header"
+                              data-thread-selection-safe
+                              className="list-none"
+                            >
+                              <button
+                                type="button"
+                                onClick={toggleSettledShelf}
+                                aria-expanded={settledShelfExpanded}
+                                className="mb-1 mt-3 flex w-full cursor-pointer items-center gap-2 px-2.5 text-left"
+                              >
+                                <span className="text-xs font-medium text-muted-foreground/50">
+                                  {settledShelfExpanded
+                                    ? "Settled"
+                                    : `Settled (${settledThreads.length})`}
+                                </span>
+                                <span className="h-px flex-1 bg-sidebar-border/60" />
+                                <ChevronDownIcon
+                                  aria-hidden
+                                  className={cn(
+                                    "size-3 text-muted-foreground/50 transition-transform",
+                                    settledShelfExpanded && "rotate-180",
+                                  )}
+                                />
+                              </button>
+                            </li>,
+                          );
+                          appendGroups(groupedThreadLists.settled, "settled");
+                        }
+                        return groupedItems;
+                      }
                       const from = isContextDrag ? null : (dragState?.activeSection ?? null);
                       const items: ReactNode[] = [
                         <SidebarDraftBlock

@@ -125,7 +125,7 @@ export const ServerProviderWorkspaceSnapshot = Schema.Struct({
 });
 export type ServerProviderWorkspaceSnapshot = typeof ServerProviderWorkspaceSnapshot.Type;
 
-export class ServerProviderSkillLookupError extends Schema.TaggedErrorClass<ServerProviderSkillLookupError>()(
+export class ServerProviderSkillLookupError extends Schema.TaggedError<ServerProviderSkillLookupError>()(
   "ServerProviderSkillLookupError",
   {
     message: TrimmedNonEmptyString,

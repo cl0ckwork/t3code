@@ -187,20 +187,5 @@ export function splitPromptIntoComposerSegments(
   prompt: string,
   knownSlashSkillNames?: ReadonlySet<string>,
 ): ComposerPromptSegment[] {
-  if (!prompt) {
-    return [];
-  }
-
-  const segments: ComposerPromptSegment[] = [];
-  forEachPromptSegmentSlice(prompt, (slice) => {
-    if (slice.type === "text") {
-      segments.push(...splitPromptTextIntoComposerSegments(slice.text, knownSlashSkillNames));
-      return false;
-    }
-
-    segments.push({ type: "terminal-context", context: null });
-    return false;
-  });
-
-  return segments;
+  return splitPromptTextIntoComposerSegments(prompt, knownSlashSkillNames);
 }

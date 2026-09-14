@@ -294,7 +294,6 @@ describe("splitPromptIntoComposerSegments", () => {
     expect(
       splitPromptIntoComposerSegments(
         "Use /review-follow-up please",
-        [],
         new Set(["review-follow-up"]),
       ),
     ).toEqual([

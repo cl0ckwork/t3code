@@ -3179,21 +3179,40 @@ export default function Sidebar() {
     return map;
   }, [activeThreads, pinnedThreads, settledThreads, snoozedThreads]);
   const groupedThreadLists = useMemo(() => {
-    const group = (threads: readonly EnvironmentThreadShell[]) =>
+    type GroupedThread = Pick<
+      EnvironmentThreadShell,
+      "environmentId" | "projectId" | "worktreePath" | "branch"
+    > & {
+      readonly thread: EnvironmentThreadShell;
+      readonly section: SidebarSection;
+    };
+    const entry = (thread: EnvironmentThreadShell, section: SidebarSection): GroupedThread => ({
+      ...thread,
+      thread,
+      section,
+    });
+    const group = (threads: readonly GroupedThread[]) =>
       groupSidebarThreads({
         grouping: sidebarThreadGrouping,
         groupOrder: sidebarThreadGroupOrder,
         threads,
-        getProject: (thread) => {
+        getProject: ({ thread }) => {
           const project = projectByKey.get(`${thread.environmentId}:${thread.projectId}`);
           return project ? { title: project.title, workspaceRoot: project.workspaceRoot } : null;
         },
         getWorkspaceLabel: (path) => path.split("/").filter(Boolean).at(-1) ?? path,
-        getStatus: resolveSidebarThreadStatus,
+        getStatus: ({ thread }) => resolveSidebarThreadStatus(thread),
       });
     return {
-      active: group([...pinnedThreads, ...activeThreads, ...visibleSnoozedThreads]),
-      settled: group(renderedSettledThreads),
+      // A grouped row retains its section at classification time. Looking it
+      // up again by key during render can briefly disagree while an un-settle
+      // moves a shell from the settled tail into active state.
+      active: group([
+        ...pinnedThreads.map((thread) => entry(thread, "pinned")),
+        ...activeThreads.map((thread) => entry(thread, "active")),
+        ...visibleSnoozedThreads.map((thread) => entry(thread, "snoozed")),
+      ]),
+      settled: group(renderedSettledThreads.map((thread) => entry(thread, "settled"))),
     };
   }, [
     activeThreads,
@@ -4570,9 +4589,7 @@ export default function Sidebar() {
                 <>
                   <Menu>
                     <MenuTrigger
-                      render={
-                        <SidebarHeaderIconButton label="Group sidebar sessions" />
-                      }
+                      render={<SidebarHeaderIconButton label="Group sidebar sessions" />}
                     >
                       <ListFilterIcon />
                     </MenuTrigger>
@@ -4906,14 +4923,8 @@ export default function Sidebar() {
                                 </span>
                               </li>,
                             );
-                            for (const thread of group.threads) {
-                              const threadKey = scopedThreadKey(
-                                scopeThreadRef(thread.environmentId, thread.id),
-                              );
-                              const section = sectionByThreadKey.get(threadKey);
-                              if (section !== undefined) {
-                                groupedItems.push(renderThreadRow(thread, section));
-                              }
+                            for (const { thread, section } of group.threads) {
+                              groupedItems.push(renderThreadRow(thread, section));
                             }
                           }
                         };

@@ -252,6 +252,8 @@ describe("detectComposerTrigger", () => {
       kind: "pull-request",
       query: "8737",
       rangeStart: "Compare this with ".length,
+      rangeEnd: text.length,
+    });
   });
 
   it("detects a slash skill trigger after an existing inline token", () => {

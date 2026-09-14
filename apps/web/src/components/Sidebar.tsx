@@ -3469,7 +3469,7 @@ export default function Sidebar() {
           return project ? { title: project.title, workspaceRoot: project.workspaceRoot } : null;
         },
         getWorkspaceLabel: (path) => path.split("/").filter(Boolean).at(-1) ?? path,
-        getStatus: resolveSidebarThreadStatus,
+        getStatus: ({ thread }) => resolveSidebarThreadStatus(thread),
       });
     return {
       active: group(activeThreads),
@@ -4702,9 +4702,7 @@ export default function Sidebar() {
                 <>
                   <Menu>
                     <MenuTrigger
-                      render={
-                        <SidebarHeaderIconButton label="Group sidebar sessions" />
-                      }
+                      render={<SidebarHeaderIconButton label="Group sidebar sessions" />}
                     >
                       <ListFilterIcon />
                     </MenuTrigger>

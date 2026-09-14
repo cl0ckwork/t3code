@@ -36,6 +36,7 @@ import { ProjectionCheckpointRepository } from "../src/persistence/Services/Proj
 import { ProjectionPendingApprovalRepository } from "../src/persistence/Services/ProjectionPendingApprovals.ts";
 import { makeAdapterRegistryMock } from "../src/provider/testUtils/providerAdapterRegistryMock.ts";
 import { ProviderAdapterRegistry } from "../src/provider/Services/ProviderAdapterRegistry.ts";
+import { ProviderInstanceRegistry } from "../src/provider/Services/ProviderInstanceRegistry.ts";
 import { makeProviderRegistryLayer } from "../src/provider/testUtils/providerRegistryMock.ts";
 import { ProviderSessionDirectoryLive } from "../src/provider/Layers/ProviderSessionDirectory.ts";
 import { ServerSettingsService } from "../src/serverSettings.ts";
@@ -342,6 +343,11 @@ export const makeOrchestrationIntegrationHarness = (
       Layer.provide(
         Layer.mock(ProviderAuthService)({
           tryHandlePromptCommand: () => Effect.succeed(false),
+        }),
+      ),
+      Layer.provideMerge(
+        Layer.mock(ProviderInstanceRegistry)({
+          getInstance: () => Effect.succeed(undefined),
         }),
       ),
       Layer.provideMerge(runtimeServicesLayer),

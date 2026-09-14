@@ -50,6 +50,7 @@ import {
 import { ProviderSessionDirectoryPersistenceError } from "../provider/Errors.ts";
 import { ProviderAdapterRegistry } from "../provider/Services/ProviderAdapterRegistry.ts";
 import { ProviderAuthService } from "../provider/Services/ProviderAuthService.ts";
+import { ProviderInstanceRegistry } from "../provider/Services/ProviderInstanceRegistry.ts";
 import * as ProviderSessionDirectory from "../provider/Services/ProviderSessionDirectory.ts";
 import { makeAdapterRegistryMock } from "../provider/testUtils/providerAdapterRegistryMock.ts";
 import { makeProviderRegistryLayer } from "../provider/testUtils/providerRegistryMock.ts";
@@ -925,6 +926,11 @@ it.layer(integrationLayer)("AgentSessionImporter integration", (it) => {
           Layer.provide(
             Layer.mock(ProviderAuthService)({
               tryHandlePromptCommand: () => Effect.succeed(false),
+            }),
+          ),
+          Layer.provideMerge(
+            Layer.mock(ProviderInstanceRegistry)({
+              getInstance: () => Effect.succeed(undefined),
             }),
           ),
           Layer.provide(makeProviderRegistryLayer()),

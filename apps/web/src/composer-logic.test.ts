@@ -339,6 +339,18 @@ describe("detectComposerTrigger", () => {
     });
   });
 
+  it("detects a slash skill trigger after an existing inline token", () => {
+    const text = "Use $review-follow-up /sprint";
+    const trigger = detectComposerTrigger(text, text.length);
+
+    expect(trigger).toEqual({
+      kind: "slash-command",
+      query: "sprint",
+      rangeStart: "Use $review-follow-up ".length,
+      rangeEnd: text.length,
+    });
+  });
+
   it("opens pull request completion from a bare hash", () => {
     const text = "Compare with #";
 

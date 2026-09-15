@@ -3427,7 +3427,15 @@ export default function Sidebar() {
       cancelThreadDrag();
     }
   }, [cancelThreadDrag, dragState, sidebarListItems]);
+  const sidebarListHasRows = sidebarListItems.length + visibleDraftSessionCount > 0;
   const listMotionPaused = dragState !== null;
+  // The sortable layout only exists in the ungrouped presentation. A grouped
+  // list inserts its own headers and can move several groups for one status
+  // change, so reusing the sortable baseline would leave stale header clones
+  // behind. Keep that presentation stable; ordinary list motion and drag
+  // release animation remain available when grouping is off.
+  const listMotionEnabled =
+    sidebarThreadGrouping === "none" && !listMotionPaused && sidebarListHasRows;
   // Every shell event rebuilds sidebarListItems, but rows only move when the
   // rendered order or a row's section changes. Keying the motion pass on that
   // keeps ordinary updates from forcing a layout read and animating rows
@@ -3439,19 +3447,42 @@ export default function Sidebar() {
         .join("\0"),
     [sidebarListItems],
   );
-  const sidebarListHasRows = sidebarListItems.length + visibleDraftSessionCount > 0;
+  const groupedSidebarListOrderKey = useMemo(() => {
+    const groupEntries = (
+      section: "active" | "settled",
+      groups: typeof groupedThreadLists.active,
+    ) =>
+      groups.flatMap((group) => [
+        `group:${section}:${group.key}`,
+        ...group.threads.map(({ thread, section: threadSection }) => {
+          const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
+          return `${threadKey}:${threadSection}`;
+        }),
+      ]);
+    return [
+      ...groupEntries("active", groupedThreadLists.active),
+      ...(settledThreads.length > 0
+        ? [
+            `settled-header:${settledThreads.length}`,
+            ...groupEntries("settled", groupedThreadLists.settled),
+          ]
+        : []),
+    ].join("\0");
+  }, [groupedThreadLists.active, groupedThreadLists.settled, settledThreads.length]);
+  const renderedSidebarListOrderKey =
+    sidebarThreadGrouping === "none" ? sidebarListOrderKey : groupedSidebarListOrderKey;
   useLayoutEffect(() => {
     // Drag release clears the baseline, so its commit cannot replay the
     // sortable preview; rows glide from their released positions instead.
     // Later thread actions can animate while writes settle.
     // Draft navigation can reveal a frozen row without changing the draft count.
-    void sidebarListOrderKey;
-    listMotionRef.current?.update(!listMotionPaused && sidebarListHasRows);
+    void renderedSidebarListOrderKey;
+    listMotionRef.current?.update(listMotionEnabled);
   }, [
-    listMotionPaused,
+    listMotionEnabled,
     routeDraftIdForRows,
     sidebarListHasRows,
-    sidebarListOrderKey,
+    renderedSidebarListOrderKey,
     visibleDraftSessionCount,
   ]);
   const handleThreadDragOver = useCallback(

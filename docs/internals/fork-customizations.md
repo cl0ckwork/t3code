@@ -114,6 +114,10 @@ for groups with members in that lifecycle list, and their React keys include the
 as well as the group key. Otherwise an unsettle can leave an empty header or active and settled
 headers can collide when they share a label.
 
+List-motion is deliberately disabled while grouping is enabled. Its sortable-layout baseline does
+not include group headers, so animating a status or worktree transition can leave stale cloned
+headers in the DOM. Ungrouped mode keeps the existing row and drag-release animations.
+
 ## Pull-request refresh safety
 
 Pull-request polling was disruptive to active review: a detail refresh changed the revision token,

@@ -3631,8 +3631,12 @@ export default function Sidebar() {
     visibleDraftSessionCount,
     routeDraftIdForRows ?? "",
   ].join("\0");
+  // Group headers are not sortable rows. Disable list motion while grouping so
+  // its previous sortable baseline cannot leave stale header clones behind.
   const listMotionAnimate =
-    dragState === null && sidebarListItems.length + visibleDraftSessionCount > 0;
+    sidebarThreadGrouping === "none" &&
+    dragState === null &&
+    sidebarListItems.length + visibleDraftSessionCount > 0;
   // The effect reads only `animate`; the pass object is cached on both fields,
   // so a new layout key alone also triggers it.
   const listMotionPass = { layoutKey: listMotionLayoutKey, animate: listMotionAnimate };
@@ -3664,7 +3668,7 @@ export default function Sidebar() {
         });
   const sidebarSortingStrategy = createSidebarSortingStrategy({
     items: sidebarListItems,
-    enabled: !isContextDrag,
+    enabled: sidebarThreadGrouping === "none" && !isContextDrag,
     boundaryLabelHeight: SIDEBAR_DRAG_LABEL_HEIGHT,
     settledOrder: draggedSettledOrder,
     ...(draggedActiveOrder === undefined ? {} : { activeOrder: draggedActiveOrder }),

@@ -4906,11 +4906,16 @@ export default function Sidebar() {
                             onNavigateToDraft={navigateToDraft}
                           />,
                         ];
-                        const appendGroups = (groups: typeof groupedThreadLists.active) => {
+                        const appendGroups = (
+                          section: "active" | "settled",
+                          groups: typeof groupedThreadLists.active,
+                        ) => {
                           for (const group of groups) {
                             groupedItems.push(
                               <li
-                                key={`thread-group:${group.key}`}
+                                // Group keys are unique within a list, but the same project,
+                                // workspace, branch, or status can exist in active and settled.
+                                key={`thread-group:${section}:${group.key}`}
                                 data-thread-selection-safe
                                 className="mb-1 mt-3 flex items-center gap-2 px-2.5"
                               >
@@ -4928,7 +4933,7 @@ export default function Sidebar() {
                             }
                           }
                         };
-                        appendGroups(groupedThreadLists.active);
+                        appendGroups("active", groupedThreadLists.active);
                         if (settledThreads.length > 0) {
                           groupedItems.push(
                             <li
@@ -4958,7 +4963,7 @@ export default function Sidebar() {
                               </button>
                             </li>,
                           );
-                          appendGroups(groupedThreadLists.settled);
+                          appendGroups("settled", groupedThreadLists.settled);
                         }
                         return groupedItems;
                       }

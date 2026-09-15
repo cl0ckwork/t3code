@@ -1141,16 +1141,14 @@ function PullRequestsRouteView() {
     refreshAfterTurn();
   }, [turnRefreshToken]);
 
-  // The list goes stale the same way the detail does: somebody opens a pull request, a check
-  // finishes, a branch is merged. So it reads again on the way back to the window, and once a
-  // minute while somebody is reading it. Those reads go through the server's cache and stop
-  // when the reader stops, which is what keeps a page left open from spending a night of the
-  // host's rate limit.
+  // Return to an up-to-date list when the reader comes back to it, but do not periodically
+  // reorder a list someone may be actively scanning. The explicit Refresh control is the only
+  // action that bypasses the server cache.
   useLiveRefresh(
     () => {
       refreshList(true);
     },
-    { enabled: pullRequestsSupported },
+    { enabled: pullRequestsSupported, poll: false },
   );
 
   const viewers = baselineQuery.data?.viewers ?? listData?.viewers ?? EMPTY_VIEWERS;

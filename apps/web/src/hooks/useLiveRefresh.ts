@@ -117,9 +117,9 @@ function watchInteraction(): () => void {
 
 export function useLiveRefresh(
   refresh: (() => void) | null,
-  options: { readonly enabled?: boolean; readonly key?: string } = {},
+  options: { readonly enabled?: boolean; readonly key?: string; readonly poll?: boolean } = {},
 ): void {
-  const { enabled = true, key } = options;
+  const { enabled = true, key, poll = true } = options;
   // Held in a ref so a caller can pass a fresh closure every render without re-arming the
   // listeners, which would otherwise refresh on every render that changed anything at all.
   const latest = useRef(refresh);
@@ -161,7 +161,7 @@ export function useLiveRefresh(
     // way back. Nothing else moves the window between showing and hidden, so nothing else re-arms.
     const syncTimer = () => {
       clearInterval(timer);
-      timer = visible() ? setInterval(onInterval, LIVE_REFRESH_INTERVAL_MS) : undefined;
+      timer = poll && visible() ? setInterval(onInterval, LIVE_REFRESH_INTERVAL_MS) : undefined;
     };
     const onVisibilityChange = () => {
       onArrival();
@@ -179,5 +179,5 @@ export function useLiveRefresh(
       document.removeEventListener("visibilitychange", onVisibilityChange);
       stopWatchingInteraction();
     };
-  }, [enabled, viewId]);
+  }, [enabled, poll, viewId]);
 }

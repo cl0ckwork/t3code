@@ -79,10 +79,11 @@ export function useLiveRefresh(
   options: {
     readonly enabled?: boolean;
     readonly key?: string;
+    readonly poll?: boolean;
     readonly intervalMs?: number;
   } = {},
 ): void {
-  const { enabled = true, key, intervalMs = LIVE_REFRESH_INTERVAL_MS } = options;
+  const { enabled = true, key, poll = true, intervalMs = LIVE_REFRESH_INTERVAL_MS } = options;
   // An effect event so a caller can pass a fresh closure every render without re-arming the
   // listeners, which would otherwise refresh on every render that changed anything at all.
   const runRefresh = useEffectEvent((viewId: string, now: number) => {
@@ -118,7 +119,7 @@ export function useLiveRefresh(
     let timer: ReturnType<typeof setInterval> | undefined;
     const syncTimer = () => {
       clearInterval(timer);
-      timer = visible() ? setInterval(onInterval, intervalMs) : undefined;
+      timer = poll && visible() ? setInterval(onInterval, intervalMs) : undefined;
     };
     const onVisibilityChange = () => {
       onArrival();
@@ -139,5 +140,5 @@ export function useLiveRefresh(
       document.removeEventListener("visibilitychange", onVisibilityChange);
       stopWatchingInteraction();
     };
-  }, [enabled, viewId, intervalMs]);
+  }, [enabled, intervalMs, poll, viewId]);
 }

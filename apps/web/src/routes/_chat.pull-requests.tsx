@@ -857,11 +857,14 @@ function PullRequestsRouteView() {
     refreshAfterTurn();
   }, [turnRefreshToken]);
 
+  // Return to an up-to-date list when the reader comes back to it, but do not periodically
+  // reorder a list someone may be actively scanning. The explicit Refresh control is the only
+  // action that bypasses the server cache.
   useLiveRefresh(
     () => {
       refreshList(true);
     },
-    { enabled: pullRequestsSupported },
+    { enabled: pullRequestsSupported, poll: false },
   );
 
   const viewers = baselineQuery.data?.viewers ?? listData?.viewers ?? EMPTY_VIEWERS;

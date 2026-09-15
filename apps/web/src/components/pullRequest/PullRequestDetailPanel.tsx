@@ -828,49 +828,103 @@ export function PullRequestDetailPanel({
   };
   const [refreshToken, setRefreshToken] = useState(0);
   const codeRefreshToken = refreshToken + (turnRefresh ?? 0);
-  const [activityRevision, setActivityRevision] = useState<{
+  const [staleCodeRevision, setStaleCodeRevision] = useState<{
     readonly key: string;
     readonly updatedAt: string;
   } | null>(null);
-  const [activityRevalidations, setActivityRevalidations] = useState(0);
-  const coreUpdatedAt = coreDetail?.updatedAt ?? null;
-  if (
-    coreUpdatedAt !== null &&
-    (activityRevision?.key !== tabScopeKey || activityRevision.updatedAt !== coreUpdatedAt)
-  ) {
-    const next = { key: tabScopeKey, updatedAt: coreUpdatedAt };
-    if (!shouldRefreshPullRequestActivity(activityRevision, next)) {
-      setActivityRevision(next);
-    } else if (!activityQuery.isPending) {
-      // Let an existing read settle before revalidating the new revision. Interrupting a
-      // mutation's activity refresh can leave SWR displaying its previous value.
-      setActivityRevision(next);
-      setActivityRevalidations((count) => count + 1);
-      setRefreshToken((token) => token + 1);
+  const codeIsStale = staleCodeRevision?.key === tabScopeKey;
+  const staleToastRevisionRef = useRef<string | null>(null);
+  const staleToastIdRef = useRef<ReturnType<typeof toastManager.add> | null>(null);
+  const backgroundRefreshKeyRef = useRef<string | null>(null);
+  const clearStaleCodeRevision = useCallback(() => {
+    setStaleCodeRevision((current) => (current?.key === tabScopeKey ? null : current));
+    staleToastRevisionRef.current = null;
+    if (staleToastIdRef.current !== null) {
+      toastManager.close(staleToastIdRef.current);
+      staleToastIdRef.current = null;
     }
-  }
-  const revalidateActivity = useEffectEvent(() => activityQuery.refresh());
-  useEffect(() => {
-    if (activityRevalidations > 0) revalidateActivity();
-  }, [activityRevalidations]);
-  useLiveRefresh(
-    () => {
-      detailQuery.refresh();
+  }, [tabScopeKey]);
+  // A stale toast belongs to the pull request that produced it. Do not leave an action around
+  // that can refresh a pull request the reader has already navigated away from.
+  useEffect(
+    () => () => {
+      if (staleToastIdRef.current !== null) {
+        toastManager.close(staleToastIdRef.current);
+        staleToastIdRef.current = null;
+      }
+      staleToastRevisionRef.current = null;
     },
-    { key: `pull-request:${environmentId}:${pullRequestKey}` },
+    [tabScopeKey],
   );
   const invalidate = useAtomCommand(pullRequestEnvironment.invalidate, { reportFailure: false });
   const [isInvalidating, setIsInvalidating] = useState(false);
   const refreshing = isInvalidating || detailQuery.isPending;
   const refreshFromHost = async () => {
+    clearStaleCodeRevision();
     setIsInvalidating(true);
-    // Atom commands settle instead of throwing, so the reset below always runs.
-    await invalidate({ environmentId, input: { reference } });
-    refreshDetail();
-    setRefreshToken((token) => token + 1);
-    setIsInvalidating(false);
+    try {
+      await invalidate({ environmentId, input: { reference } });
+      refreshDetail();
+      setRefreshToken((token) => token + 1);
+    } finally {
+      setIsInvalidating(false);
+    }
   };
   const refreshFromHostOnRequest = useEffectEvent(() => void refreshFromHost());
+  const notifyStaleCode = useEffectEvent(
+    (revision: { readonly key: string; readonly updatedAt: string }) => {
+      const revisionKey = `${revision.key}:${revision.updatedAt}`;
+      if (staleToastRevisionRef.current === revisionKey) return;
+      staleToastRevisionRef.current = revisionKey;
+      const toastId = toastManager.add({
+        type: "warning",
+        title: "Pull request updated",
+        description: "Refresh to load the latest diff.",
+        actionProps: {
+          children: "Refresh",
+          onClick: () => {
+            toastManager.close(toastId);
+            staleToastIdRef.current = null;
+            void refreshFromHost();
+          },
+        },
+      });
+      staleToastIdRef.current = toastId;
+    },
+  );
+  const activityRevision = useRef<{ readonly key: string; readonly updatedAt: string } | null>(
+    null,
+  );
+  useEffect(() => {
+    if (!coreDetail) return;
+    const next = { key: tabScopeKey, updatedAt: coreDetail.updatedAt };
+    if (shouldRefreshPullRequestActivity(activityRevision.current, next)) {
+      if (backgroundRefreshKeyRef.current === tabScopeKey) {
+        const revision = { key: tabScopeKey, updatedAt: coreDetail.updatedAt };
+        backgroundRefreshKeyRef.current = null;
+        setStaleCodeRevision(revision);
+        notifyStaleCode(revision);
+      }
+      // Let an existing read settle before revalidating the new revision. Interrupting a
+      // mutation's activity refresh can leave SWR displaying its previous value.
+      if (activityQuery.isPending) return;
+      activityQuery.refresh();
+    }
+    activityRevision.current = next;
+  }, [activityQuery.isPending, activityQuery.refresh, coreDetail, tabScopeKey]);
+  useEffect(() => {
+    if (!detailQuery.isPending) backgroundRefreshKeyRef.current = null;
+  }, [detailQuery.isPending]);
+  // Returning to the window may read metadata through the server cache, but never replaces an
+  // in-progress review's diff. A changed revision becomes an explicit refresh choice instead.
+  const refreshFromBackground = useEffectEvent(() => {
+    backgroundRefreshKeyRef.current = tabScopeKey;
+    detailQuery.refresh();
+  });
+  useLiveRefresh(refreshFromBackground, {
+    key: `pull-request:${environmentId}:${pullRequestKey}`,
+    poll: false,
+  });
   const appliedForcedToken = useRef(forcedRefreshToken);
   useEffect(() => {
     if (appliedForcedToken.current === forcedRefreshToken) return;
@@ -2035,11 +2089,22 @@ export function PullRequestDetailPanel({
                         render={
                           <Button
                             aria-label={
-                              refreshing ? "Refreshing pull request" : "More pull request actions"
+                              refreshing
+                                ? "Refreshing pull request"
+                                : codeIsStale
+                                ? "More pull request actions; update available"
+                                : "More pull request actions"
                             }
                             size="icon-xs"
                             variant="ghost-muted"
-                          />
+                          >
+                            {codeIsStale ? (
+                              <span
+                                aria-hidden
+                                className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-amber-400 ring-1 ring-background"
+                              />
+                            ) : null}
+                          </Button>
                         }
                       >
                         {refreshing ? (
@@ -2068,7 +2133,7 @@ export function PullRequestDetailPanel({
                   />
                   <MenuItem disabled={refreshing} onClick={() => void refreshFromHost()}>
                     <RefreshIcon size="sm" refreshing={refreshing} />
-                    Refresh
+                    {codeIsStale ? "Refresh — update available" : "Refresh"}
                   </MenuItem>
                   <MenuItem disabled={handoff !== null} onClick={askAboutPullRequest}>
                     <MessageCircleQuestionIcon className="mt-1 size-3.5 shrink-0 self-start" />

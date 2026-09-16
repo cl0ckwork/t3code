@@ -1778,7 +1778,8 @@ describe("ProviderCommandReactor", () => {
   });
 
   it("uses recent titles from the same project when generating a first-turn title", async () => {
-    const harness = await createHarness();
+    const titleSeed = "Improve the workspace skill picker";
+    const harness = await createHarness({ initialTitle: titleSeed });
     const now = "2026-01-01T00:00:00.000Z";
     const readModel = await harness.readModel();
     const modelSelection = readModel.threads[0]?.modelSelection;
@@ -1798,16 +1799,6 @@ describe("ProviderCommandReactor", () => {
         branch: null,
         worktreePath: null,
         createdAt: now,
-      }),
-    );
-
-    const titleSeed = "Improve the workspace skill picker";
-    await Effect.runPromise(
-      harness.engine.dispatch({
-        type: "thread.meta.update",
-        commandId: CommandId.make("cmd-thread-title-context-seed"),
-        threadId: ThreadId.make("thread-1"),
-        title: titleSeed,
       }),
     );
 

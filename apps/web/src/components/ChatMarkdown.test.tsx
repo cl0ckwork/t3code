@@ -9,7 +9,13 @@ import { GitHubIcon } from "./Icons";
 import { Button } from "./ui/button";
 import { setMarkdownTaskChecked } from "./files/filePreviewMode";
 
+const mermaid = vi.hoisted(() => ({
+  initialize: vi.fn(),
+  render: vi.fn(),
+}));
+
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => null }));
+vi.mock("mermaid", () => ({ default: mermaid }));
 vi.mock("../hooks/useTheme", () => ({ useTheme: () => ({ resolvedTheme: "dark" }) }));
 vi.mock("../hooks/useSettings", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../hooks/useSettings")>();
@@ -374,6 +380,44 @@ describe("ChatMarkdown streaming", () => {
       await act(async () => renderer?.unmount());
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("ChatMarkdown Mermaid diagrams", () => {
+  it("renders a completed Mermaid fence as a safe image while preserving its source", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    mermaid.initialize.mockClear();
+    mermaid.render.mockReset().mockResolvedValue({ svg: '<svg viewBox="0 0 10 10"></svg>' });
+    let renderer: ReactTestRenderer | undefined;
+    const text = "```mermaid\nflowchart LR\n  A --> B\n```";
+    try {
+      await act(async () => {
+        renderer = create(<ChatMarkdown cwd="/tmp/project" text={text} />);
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      const diagram = renderer!.root.findByProps({ "data-mermaid-diagram": true });
+      expect(diagram.findByType("img").props.src).toMatch(/^data:image\/svg\+xml;charset=utf-8,/);
+      expect(diagram.findByType("img").props.alt).toBe("Mermaid diagram");
+      expect(diagram.findByType("code").children.join("")).toContain("flowchart LR");
+      expect(mermaid.initialize).toHaveBeenCalledWith(
+        expect.objectContaining({ securityLevel: "strict", startOnLoad: false, theme: "dark" }),
+      );
+    } finally {
+      await act(async () => renderer?.unmount());
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps an in-progress Mermaid fence as ordinary source code", async () => {
+    mermaid.render.mockClear();
+    const html = renderToStaticMarkup(
+      <ChatMarkdown cwd="/tmp/project" isStreaming text="```mermaid\nflowchart LR\n  A --> B" />,
+    );
+    expect(html).not.toContain("data-mermaid-diagram");
+    expect(mermaid.render).not.toHaveBeenCalled();
   });
 });
 

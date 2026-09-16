@@ -98,6 +98,20 @@ components.
 Preserve both trigger forms as a UI affordance. Provider-native slash commands remain distinct
 from skills; do not consume or rewrite a real provider command because its name resembles a skill.
 
+## Mermaid diagrams in chat
+
+Completed `mermaid` fences render as diagrams in web chat (and therefore desktop); unfinished
+streaming fences and native mobile retain the ordinary source-code fallback. Rendering is lazy and
+memoized in [`ChatMarkdown.tsx`](../../apps/web/src/components/ChatMarkdown.tsx), so normal chat
+startup does not download Mermaid.
+
+Mermaid is initialized with strict security and its SVG is rendered through an image data URL, not
+inserted into the chat DOM. Keep both boundaries when rebasing: agent output is untrusted and a
+diagram should not gain DOM access merely because it renders visually. The source remains copyable
+and visible when the renderer fails. `khroma` is a Mermaid dependency whose archive includes an
+MIT license file but omits license metadata, so its narrow manifest override in
+[`third-party-licenses.config.json`](../../third-party-licenses.config.json) is intentional.
+
 ## Thread titles
 
 Thread titles use the project's existing naming language rather than free-form summaries. The

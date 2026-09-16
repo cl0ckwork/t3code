@@ -918,12 +918,14 @@ function MarkdownCodeBlock({
   fenceTitle,
   theme,
   children,
+  showWrap = true,
 }: {
   code: string;
   language: string;
   fenceTitle: string | null;
   theme: "light" | "dark";
   children: ReactNode;
+  showWrap?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const [wrapped, setWrapped] = useState(readInitialWordWrapSetting);
@@ -984,24 +986,26 @@ function MarkdownCodeBlock({
           />
         </span>
         <span className="flex items-center gap-0.5" role="toolbar" aria-label="Code block actions">
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  className="chat-markdown-chrome-action"
-                  aria-pressed={wrapped}
-                  onClick={() => setWrapped((value) => !value)}
-                  aria-label={wrapLabel}
-                />
-              }
-            >
-              <WrapTextIcon className="size-3" />
-            </TooltipTrigger>
-            <TooltipPopup side="top">{wrapLabel}</TooltipPopup>
-          </Tooltip>
+          {showWrap ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="chat-markdown-chrome-action"
+                    aria-pressed={wrapped}
+                    onClick={() => setWrapped((value) => !value)}
+                    aria-label={wrapLabel}
+                  />
+                }
+              >
+                <WrapTextIcon className="size-3" />
+              </TooltipTrigger>
+              <TooltipPopup side="top">{wrapLabel}</TooltipPopup>
+            </Tooltip>
+          ) : null}
           <Tooltip>
             <TooltipTrigger
               render={
@@ -1023,6 +1027,152 @@ function MarkdownCodeBlock({
       </div>
       {children}
     </div>
+  );
+}
+
+const MAX_MERMAID_SOURCE_LENGTH = 50_000;
+const MAX_MERMAID_EDGES = 1_000;
+const mermaidSvgCache = new LRUCache<string>(40, 4 * 1024 * 1024);
+const mermaidSvgInFlight = new Map<string, Promise<string>>();
+let mermaidRenderQueue: Promise<void> = Promise.resolve();
+let mermaidRenderId = 0;
+
+function mermaidCacheKey(code: string, theme: "light" | "dark"): string {
+  // The source stays in the key deliberately: a hash collision must never show
+  // one agent response's diagram in place of another's.
+  return `${theme}:${code}`;
+}
+
+function mermaidErrorMessage(cause: unknown): string {
+  const message = cause instanceof Error ? cause.message : "Unknown Mermaid rendering error.";
+  return message.split(/\r?\n/, 1)[0]?.slice(0, 240) || "Unknown Mermaid rendering error.";
+}
+
+function renderMermaidSvg(input: { code: string; theme: "light" | "dark" }): Promise<string> {
+  if (input.code.length > MAX_MERMAID_SOURCE_LENGTH) {
+    return Promise.reject(
+      new Error(
+        `Diagram source exceeds the ${MAX_MERMAID_SOURCE_LENGTH.toLocaleString()} character limit.`,
+      ),
+    );
+  }
+
+  const cacheKey = mermaidCacheKey(input.code, input.theme);
+  const cached = mermaidSvgCache.get(cacheKey);
+  if (cached !== null) return Promise.resolve(cached);
+
+  const existing = mermaidSvgInFlight.get(cacheKey);
+  if (existing) return existing;
+
+  // Mermaid's configuration is process-global. Serialize initialisation and
+  // rendering so concurrently visible light and dark messages cannot race.
+  const render = mermaidRenderQueue.then(async () => {
+    const { default: mermaid } = await import("mermaid");
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: input.theme === "dark" ? "dark" : "default",
+      maxTextSize: MAX_MERMAID_SOURCE_LENGTH,
+      maxEdges: MAX_MERMAID_EDGES,
+    });
+    const { svg } = await mermaid.render(`t3-mermaid-${++mermaidRenderId}`, input.code);
+    mermaidSvgCache.set(cacheKey, svg, svg.length * 2);
+    return svg;
+  });
+  mermaidRenderQueue = render.then(
+    () => undefined,
+    () => undefined,
+  );
+  mermaidSvgInFlight.set(cacheKey, render);
+  void render.then(
+    () => mermaidSvgInFlight.delete(cacheKey),
+    () => mermaidSvgInFlight.delete(cacheKey),
+  );
+  return render;
+}
+
+type MermaidDiagramState =
+  | { readonly tag: "pending" }
+  | { readonly tag: "ready"; readonly svg: string }
+  | { readonly tag: "error"; readonly message: string };
+
+function MermaidDiagram({
+  code,
+  theme,
+  fallback,
+}: {
+  readonly code: string;
+  readonly theme: "light" | "dark";
+  readonly fallback: ReactNode;
+}) {
+  const cacheKey = mermaidCacheKey(code, theme);
+  const [state, setState] = useState<MermaidDiagramState>(() => {
+    const cached = mermaidSvgCache.get(cacheKey);
+    return cached === null ? { tag: "pending" } : { tag: "ready", svg: cached };
+  });
+
+  useEffect(() => {
+    let active = true;
+    const cached = mermaidSvgCache.get(cacheKey);
+    if (cached !== null) {
+      setState({ tag: "ready", svg: cached });
+      return () => {
+        active = false;
+      };
+    }
+
+    setState({ tag: "pending" });
+    void renderMermaidSvg({ code, theme }).then(
+      (svg) => {
+        if (active) setState({ tag: "ready", svg });
+      },
+      (cause: unknown) => {
+        if (active) setState({ tag: "error", message: mermaidErrorMessage(cause) });
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [cacheKey, code, theme]);
+
+  if (state.tag === "pending") return fallback;
+  if (state.tag === "error") {
+    return (
+      <>
+        {fallback}
+        <p role="alert" className="mt-1 text-xs text-destructive">
+          Could not render Mermaid diagram: {state.message}
+        </p>
+      </>
+    );
+  }
+
+  // SVG is deliberately an image source, never injected into T3's document.
+  // Mermaid's strict mode disables diagram links and HTML labels; the image
+  // boundary also keeps generated SVG markup out of the chat DOM.
+  const svgDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(state.svg)}`;
+  return (
+    <MarkdownCodeBlock
+      code={code}
+      language="mermaid"
+      fenceTitle={null}
+      theme={theme}
+      showWrap={false}
+    >
+      <figure className="p-3" data-mermaid-diagram>
+        <img
+          className="mx-auto block max-h-[32rem] max-w-full"
+          src={svgDataUrl}
+          alt="Mermaid diagram"
+        />
+        <details className="mt-2 text-xs text-muted-foreground">
+          <summary className="cursor-pointer select-none">View diagram source</summary>
+          <pre className="mt-2 overflow-x-auto rounded-sm bg-background/50 p-2 text-foreground">
+            <code>{code}</code>
+          </pre>
+        </details>
+      </figure>
+    </MarkdownCodeBlock>
   );
 }
 
@@ -3262,7 +3412,7 @@ const CHAT_MARKDOWN_COMPONENTS = {
 
     const language = extractFenceLanguage(codeBlock.className);
     const fenceTitle = extractFenceTitle(extractPreCodeMeta(node));
-    return (
+    const codeFallback = (
       <MarkdownCodeBlock
         code={codeBlock.code}
         language={language}
@@ -3292,6 +3442,31 @@ const CHAT_MARKDOWN_COMPONENTS = {
         </RenderErrorBoundary>
       </MarkdownCodeBlock>
     );
+    if (language.toLowerCase() === "mermaid" && !isStreaming) {
+      // Do not start Shiki for a fence that Mermaid will replace. The source
+      // remains immediately available while Mermaid's lazy chunks load.
+      const mermaidFallback = (
+        <MarkdownCodeBlock
+          code={codeBlock.code}
+          language={language}
+          fenceTitle={fenceTitle}
+          theme={resolvedTheme}
+        >
+          <pre {...props}>
+            <code className={codeBlock.className}>{codeBlock.code}</code>
+          </pre>
+        </MarkdownCodeBlock>
+      );
+      return (
+        <MermaidDiagram
+          key={mermaidCacheKey(codeBlock.code, resolvedTheme)}
+          code={codeBlock.code}
+          theme={resolvedTheme}
+          fallback={mermaidFallback}
+        />
+      );
+    }
+    return codeFallback;
   },
 } satisfies Components;
 

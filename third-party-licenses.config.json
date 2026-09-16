@@ -249,6 +249,12 @@
       }
     },
     {
+      "name": "khroma",
+      "version": "2.1.0",
+      "license": "MIT",
+      "sourceUrl": "https://github.com/fabiospampinato/khroma"
+    },
+    {
       "license": "Apache-2.0",
       "name": "jsbi"
     },

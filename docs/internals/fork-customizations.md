@@ -14,6 +14,27 @@ After a rebase, start with focused tests beside the changed behavior, then exerc
 UI manually. Use two projects or worktrees for workspace-scoped behavior; a one-project smoke test
 cannot reveal cross-project leakage.
 
+## Thread-scoped live diffs
+
+Live working-tree and branch diffs belong to the thread's workspace, not the T3 server's launch
+directory. This fixes the external-worktree failure tracked upstream in
+[#4022](https://github.com/pingdotgg/t3code/issues/4022): the old review API accepted a client
+`cwd`, rejected valid project worktrees outside the server root, then the web client silently
+retried against the server cwd and rendered an unrelated or empty diff.
+
+The review RPC now accepts only a `threadId`. [`ReviewService.ts`](../../apps/server/src/review/ReviewService.ts)
+uses persisted projection data to resolve `thread.worktreePath ?? project.workspaceRoot`; the
+VCS receives that derived path only after resolution. Preview requests and lazy full-file
+expansion share this boundary. Web and mobile send the selected thread id, and the web diff panel
+does not contain a fallback query against the server cwd.
+
+Keep these invariants on rebase:
+
+- A client cannot choose an arbitrary filesystem path for live-diff preview or expansion.
+- An active worktree thread reads its own worktree; an in-place thread reads its project root.
+- A missing or unreadable thread returns a typed workspace error. It must not silently diff a
+  different repository.
+
 ## Workspace-scoped provider skills
 
 T3 Code's provider snapshot is global process state, but a repository skill belongs to the active

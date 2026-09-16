@@ -337,39 +337,19 @@ export default function DiffPanel({
     { enabled: isGitRepo && selectedTurn !== undefined },
   );
   const primaryBranchDiffPreview = useEnvironmentQuery(
-    selectedRunId === null && activeThread && activeCwd
+    selectedRunId === null && activeThread
       ? reviewEnvironment.diffPreview({
           environmentId: activeThread.environmentId,
           input: {
-            cwd: activeCwd,
+            threadId: activeThread.id,
             ...(selectedBaseRef ? { baseRef: selectedBaseRef } : {}),
             ignoreWhitespace: diffIgnoreWhitespace,
           },
         })
       : null,
   );
-  const shouldRetryBranchDiffAtEnvironmentCwd =
-    selectedRunId === null &&
-    primaryBranchDiffPreview.error?.includes("configured workspace root") === true &&
-    serverConfig?.cwd !== undefined &&
-    serverConfig.cwd !== activeCwd;
-  const fallbackBranchDiffPreview = useEnvironmentQuery(
-    shouldRetryBranchDiffAtEnvironmentCwd && activeThread && serverConfig
-      ? reviewEnvironment.diffPreview({
-          environmentId: activeThread.environmentId,
-          input: {
-            cwd: serverConfig.cwd,
-            ...(selectedBaseRef ? { baseRef: selectedBaseRef } : {}),
-            ignoreWhitespace: diffIgnoreWhitespace,
-          },
-        })
-      : null,
-  );
-  const branchDiffPreview = shouldRetryBranchDiffAtEnvironmentCwd
-    ? fallbackBranchDiffPreview
-    : primaryBranchDiffPreview;
-  const canRefreshGitDiff =
-    isGitRepo && selectedRunId === null && activeThread != null && activeCwd != null;
+  const branchDiffPreview = primaryBranchDiffPreview;
+  const canRefreshGitDiff = isGitRepo && selectedRunId === null && activeThread != null;
   const activeThreadRefreshKey = routeThreadRef
     ? `${routeThreadRef.environmentId}:${routeThreadRef.threadId}`
     : null;
@@ -388,7 +368,7 @@ export default function DiffPanel({
 
     return createGitDiffFileContentsLoader(getDiffFileContents, {
       environmentId: activeThread.environmentId,
-      cwd: preview.cwd,
+      threadId: activeThread.id,
       sourceKind: selectedGitSource.kind,
       baseRef: selectedGitSource.baseRef,
       headRef: selectedGitSource.headRef,

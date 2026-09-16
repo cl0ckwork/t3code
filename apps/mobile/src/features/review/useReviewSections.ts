@@ -7,7 +7,6 @@ import { useCheckpointDiff } from "../../state/queries";
 import { useEnvironmentQuery } from "../../state/query";
 import { reviewEnvironment } from "../../state/review";
 import { useSelectedThreadDetail } from "../../state/use-thread-detail";
-import { useSelectedThreadWorktree } from "../../state/use-selected-thread-worktree";
 import {
   buildReviewSectionItems,
   getDefaultReviewSectionId,
@@ -32,12 +31,11 @@ export function useReviewSections(input: {
   const { environmentId, reviewCache, threadId } = input;
   const enabled = input.enabled ?? true;
   const selectedThread = useSelectedThreadDetail();
-  const { selectedThreadCwd } = useSelectedThreadWorktree();
   const diffPreview = useEnvironmentQuery(
-    enabled && environmentId !== undefined && selectedThreadCwd !== null
+    enabled && environmentId !== undefined && threadId !== undefined
       ? reviewEnvironment.diffPreview({
           environmentId,
-          input: { cwd: selectedThreadCwd },
+          input: { threadId },
         })
       : null,
   );

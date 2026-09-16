@@ -268,39 +268,20 @@ export default function DiffPanel({
     { enabled: isGitRepo && selectedTurn !== undefined },
   );
   const primaryBranchDiffPreview = useEnvironmentQuery(
-    selectedTurnId === null && activeThread && activeCwd
+    selectedTurnId === null && activeThread
       ? reviewEnvironment.diffPreview({
           environmentId: activeThread.environmentId,
           input: {
-            cwd: activeCwd,
+            threadId: activeThread.id,
             ...(selectedBaseRef ? { baseRef: selectedBaseRef } : {}),
             ignoreWhitespace: diffIgnoreWhitespace,
           },
         })
       : null,
   );
-  const shouldRetryBranchDiffAtEnvironmentCwd =
-    selectedTurnId === null &&
-    primaryBranchDiffPreview.error?.includes("configured workspace root") === true &&
-    serverConfig?.cwd !== undefined &&
-    serverConfig.cwd !== activeCwd;
-  const fallbackBranchDiffPreview = useEnvironmentQuery(
-    shouldRetryBranchDiffAtEnvironmentCwd && activeThread && serverConfig
-      ? reviewEnvironment.diffPreview({
-          environmentId: activeThread.environmentId,
-          input: {
-            cwd: serverConfig.cwd,
-            ...(selectedBaseRef ? { baseRef: selectedBaseRef } : {}),
-            ignoreWhitespace: diffIgnoreWhitespace,
-          },
-        })
-      : null,
-  );
-  const branchDiffPreview = shouldRetryBranchDiffAtEnvironmentCwd
-    ? fallbackBranchDiffPreview
-    : primaryBranchDiffPreview;
-  const canRefreshGitDiff =
-    isGitRepo && selectedTurnId === null && activeThread != null && activeCwd != null;
+  const branchDiffPreview = primaryBranchDiffPreview;
+  const refreshBranchDiffPreview = branchDiffPreview.refresh;
+  const canRefreshGitDiff = isGitRepo && selectedTurnId === null && activeThread != null;
   const activeThreadRefreshKey = routeThreadRef
     ? `${routeThreadRef.environmentId}:${routeThreadRef.threadId}`
     : null;
@@ -319,7 +300,7 @@ export default function DiffPanel({
 
     return createGitDiffFileContentsLoader(getDiffFileContents, {
       environmentId: activeThread.environmentId,
-      cwd: preview.cwd,
+      threadId: activeThread.id,
       sourceKind: selectedGitSource.kind,
       baseRef: selectedGitSource.baseRef,
       headRef: selectedGitSource.headRef,

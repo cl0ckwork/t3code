@@ -78,10 +78,10 @@ import {
   VcsStatusStreamEvent,
 } from "./git.ts";
 import {
-  ReviewDiffFileContentsInput,
+  ReviewDiffFileContentsRequest,
   ReviewDiffFileContentsResult,
   ReviewDiffPreviewError,
-  ReviewDiffPreviewInput,
+  ReviewDiffPreviewRequest,
   ReviewDiffPreviewResult,
 } from "./review.ts";
 import { KeybindingsConfigError } from "./keybindings.ts";
@@ -1079,13 +1079,13 @@ const WsVcsInitRpc = Rpc.make(WS_METHODS.vcsInit, {
  * review.open* + review.getSnapshot.
  */
 const WsReviewGetDiffPreviewRpc = Rpc.make(WS_METHODS.reviewGetDiffPreview, {
-  payload: ReviewDiffPreviewInput,
+  payload: ReviewDiffPreviewRequest,
   success: ReviewDiffPreviewResult,
   error: Schema.Union([ReviewDiffPreviewError, EnvironmentAuthorizationError]),
 });
 
 const WsReviewGetDiffFileContentsRpc = Rpc.make(WS_METHODS.reviewGetDiffFileContents, {
-  payload: ReviewDiffFileContentsInput,
+  payload: ReviewDiffFileContentsRequest,
   success: ReviewDiffFileContentsResult,
   error: Schema.Union([ReviewDiffPreviewError, EnvironmentAuthorizationError]),
 });

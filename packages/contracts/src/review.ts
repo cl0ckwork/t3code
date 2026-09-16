@@ -1,8 +1,20 @@
 import * as Schema from "effect/Schema";
-import { TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { GitCommandError } from "./git.ts";
 import { VcsError } from "./vcs.ts";
 
+/**
+ * Client request for a live diff. The server resolves the workspace from the
+ * persisted thread instead of trusting a client-supplied filesystem path.
+ */
+export const ReviewDiffPreviewRequest = Schema.Struct({
+  threadId: ThreadId,
+  baseRef: Schema.optional(TrimmedNonEmptyString),
+  ignoreWhitespace: Schema.optionalKey(Schema.Boolean),
+});
+export type ReviewDiffPreviewRequest = typeof ReviewDiffPreviewRequest.Type;
+
+/** VCS-internal input after the server has resolved the thread workspace. */
 export const ReviewDiffPreviewInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
   baseRef: Schema.optional(TrimmedNonEmptyString),
@@ -42,6 +54,19 @@ export const ReviewDiffPreviewSource = Schema.Struct({
 });
 export type ReviewDiffPreviewSource = typeof ReviewDiffPreviewSource.Type;
 
+/** Client request to expand a file in a live diff. */
+export const ReviewDiffFileContentsRequest = Schema.Struct({
+  threadId: ThreadId,
+  sourceKind: ReviewDiffPreviewSourceKind,
+  changeType: Schema.Literals(["change", "rename-pure", "rename-changed", "new", "deleted"]),
+  baseRef: Schema.NullOr(TrimmedNonEmptyString),
+  headRef: Schema.NullOr(TrimmedNonEmptyString),
+  oldPath: TrimmedNonEmptyString,
+  newPath: TrimmedNonEmptyString,
+});
+export type ReviewDiffFileContentsRequest = typeof ReviewDiffFileContentsRequest.Type;
+
+/** VCS-internal input after the server has resolved the thread workspace. */
 export const ReviewDiffFileContentsInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
   sourceKind: ReviewDiffPreviewSourceKind,
@@ -66,5 +91,23 @@ export const ReviewDiffPreviewResult = Schema.Struct({
 });
 export type ReviewDiffPreviewResult = typeof ReviewDiffPreviewResult.Type;
 
-export const ReviewDiffPreviewError = Schema.Union([VcsError, GitCommandError]);
+export class ReviewWorkspaceUnavailableError extends Schema.TaggedError<ReviewWorkspaceUnavailableError>()(
+  "ReviewWorkspaceUnavailableError",
+  {
+    threadId: ThreadId,
+    reason: Schema.Literals(["not-found", "unavailable"]),
+  },
+) {
+  override get message(): string {
+    return this.reason === "not-found"
+      ? `Cannot load a diff because thread '${this.threadId}' no longer exists.`
+      : `Cannot resolve the workspace for thread '${this.threadId}'.`;
+  }
+}
+
+export const ReviewDiffPreviewError = Schema.Union([
+  VcsError,
+  GitCommandError,
+  ReviewWorkspaceUnavailableError,
+]);
 export type ReviewDiffPreviewError = typeof ReviewDiffPreviewError.Type;

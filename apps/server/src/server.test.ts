@@ -8711,9 +8711,9 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               }),
           },
           reviewService: {
-            getDiffPreview: (input) =>
+            getDiffPreview: () =>
               Effect.succeed({
-                cwd: input.cwd,
+                cwd: "/tmp/repo",
                 generatedAt: DateTime.nowUnsafe(),
                 sources: [
                   {
@@ -8853,7 +8853,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       const diffPreview = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
-          client[WS_METHODS.reviewGetDiffPreview]({ cwd: "/tmp/repo" }),
+          client[WS_METHODS.reviewGetDiffPreview]({ threadId: defaultThreadId }),
         ),
       );
       assert.equal(diffPreview.sources[0]?.diff, "dirty-diff");
@@ -8861,7 +8861,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const diffFileContents = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[WS_METHODS.reviewGetDiffFileContents]({
-            cwd: "/tmp/repo",
+            threadId: defaultThreadId,
             sourceKind: "working-tree",
             changeType: "change",
             baseRef: "HEAD",

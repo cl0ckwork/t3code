@@ -8,7 +8,7 @@ import type {
   PullRequestDiffFileContentsInput,
   PullRequestDiffFileContentsResult,
   PullRequestRef,
-  ReviewDiffFileContentsInput,
+  ReviewDiffFileContentsRequest,
   ReviewDiffFileContentsResult,
   ReviewDiffPreviewSourceKind,
 } from "@t3tools/contracts";
@@ -17,7 +17,7 @@ import { resolveFileDiffPath } from "./diffRendering";
 
 interface GitDiffFileContentsSource {
   readonly environmentId: EnvironmentId;
-  readonly cwd: string;
+  readonly threadId: ReviewDiffFileContentsRequest["threadId"];
   readonly sourceKind: ReviewDiffPreviewSourceKind;
   readonly baseRef: string | null;
   readonly headRef: string | null;
@@ -34,7 +34,7 @@ interface PullRequestDiffFileContentsSource {
 
 type GetDiffFileContents<E> = (request: {
   readonly environmentId: EnvironmentId;
-  readonly input: ReviewDiffFileContentsInput;
+  readonly input: ReviewDiffFileContentsRequest;
 }) => Promise<AtomCommandResult<ReviewDiffFileContentsResult, E>>;
 
 type GetPullRequestDiffFileContents<E> = (request: {
@@ -84,7 +84,7 @@ export function createGitDiffFileContentsLoader<E>(
     const result = await getDiffFileContents({
       environmentId: source.environmentId,
       input: {
-        cwd: source.cwd,
+        threadId: source.threadId,
         sourceKind: source.sourceKind,
         changeType,
         baseRef: source.baseRef,

@@ -174,7 +174,7 @@ function textJsonForSpan(text: string, marks: RichTextMark[]): Record<string, un
 export function buildTiptapContent(
   value: string,
   skillLabelFor: (name: string) => SkillMeta,
-  options?: { styling?: boolean },
+  options?: { styling?: boolean; knownSlashSkillNames?: ReadonlySet<string> },
 ): Record<string, unknown>[] {
   const styling = options?.styling ?? true;
   // Hide token source from the markdown parser, then restore the atoms with
@@ -184,7 +184,7 @@ export function buildTiptapContent(
     sentinel = String.fromCodePoint(codePoint);
   }
   const atoms: InlineJson[] = [];
-  const text = splitPromptIntoComposerSegments(value)
+  const text = splitPromptIntoComposerSegments(value, options?.knownSlashSkillNames)
     .map((segment) => {
       if (segment.type === "text") return segment.text;
       atoms.push(atomJsonForSegment(segment, skillLabelFor));
@@ -267,7 +267,7 @@ export function buildTiptapContent(
 export function buildDocJson(
   value: string,
   skillLabelFor: (name: string) => SkillMeta,
-  options?: { styling?: boolean },
+  options?: { styling?: boolean; knownSlashSkillNames?: ReadonlySet<string> },
 ) {
   return { type: "doc", content: buildTiptapContent(value, skillLabelFor, options) };
 }

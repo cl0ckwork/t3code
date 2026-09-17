@@ -449,7 +449,13 @@ function textJsonForSpan(text: string, marks: RichTextMark[]): Record<string, un
 export function buildTiptapContent(
   value: string,
   skillLabelFor: (name: string) => SkillMeta,
-  options?: { styling?: boolean; blocks?: boolean; literalText?: boolean; literalLength?: number },
+  options?: {
+    styling?: boolean;
+    blocks?: boolean;
+    literalText?: boolean;
+    literalLength?: number;
+    knownSlashSkillNames?: ReadonlySet<string>;
+  },
 ): Record<string, unknown>[] {
   if (options?.literalText) {
     return value.split("\n").map((line) => ({
@@ -466,7 +472,10 @@ export function buildTiptapContent(
   const atoms: InlineJson[] = [];
   const atomSources: string[] = [];
   const literal = value.slice(0, options?.literalLength ?? 0);
-  const text = splitPromptIntoComposerSegments(value.slice(literal.length))
+  const text = splitPromptIntoComposerSegments(
+    value.slice(literal.length),
+    options?.knownSlashSkillNames,
+  )
     .map((segment) => {
       if (segment.type === "text") return segment.text;
       atoms.push(atomJsonForSegment(segment, skillLabelFor));
@@ -665,7 +674,11 @@ export function buildTiptapContent(
 export function buildDocJson(
   value: string,
   skillLabelFor: (name: string) => SkillMeta,
-  options?: { styling?: boolean; literalText?: boolean },
+  options?: {
+    styling?: boolean;
+    literalText?: boolean;
+    knownSlashSkillNames?: ReadonlySet<string>;
+  },
 ) {
   const content = buildTiptapContent(value, skillLabelFor, options);
   if (content.at(-1)?.type === "horizontalRule") content.push({ type: "paragraph" });

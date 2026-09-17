@@ -1,6 +1,6 @@
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import type { FileDiffMetadata } from "@pierre/diffs";
-import type { EnvironmentId, ReviewDiffPreviewSource } from "@t3tools/contracts";
+import type { EnvironmentId, ReviewDiffPreviewSource, ThreadId } from "@t3tools/contracts";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import * as Atom from "effect/reactivity/Atom";
 import { useContext, useEffect, useRef, useState } from "react";
@@ -16,7 +16,7 @@ const DEFAULT_INDICES = [0, 1, 2, 3];
 
 export function useReviewFilePatches({
   environmentId,
-  cwd,
+  threadId,
   source,
   baseRef,
   ignoreWhitespace,
@@ -25,7 +25,7 @@ export function useReviewFilePatches({
   preview,
 }: {
   environmentId: EnvironmentId | undefined;
-  cwd: string | undefined;
+  threadId: ThreadId | undefined;
   source: ReviewDiffPreviewSource | null;
   baseRef: string | null;
   ignoreWhitespace: boolean;
@@ -36,7 +36,7 @@ export function useReviewFilePatches({
   const registry = useContext(RegistryContext);
   const scope = JSON.stringify([
     environmentId,
-    cwd,
+    threadId,
     source?.kind,
     source?.diffHash,
     baseRef,
@@ -45,7 +45,7 @@ export function useReviewFilePatches({
   const [requested, setRequested] = useState(() => ({ scope, indices: DEFAULT_INDICES }));
   const queries = reviewFileQueries({
     environmentId,
-    cwd,
+    threadId,
     source,
     baseRef,
     ignoreWhitespace,
@@ -162,7 +162,7 @@ export function useReviewFilePatches({
 // The refresh effect keys on the identity of these queries.
 function reviewFileQueries({
   environmentId,
-  cwd,
+  threadId,
   source,
   baseRef,
   ignoreWhitespace,
@@ -170,7 +170,7 @@ function reviewFileQueries({
   requested,
 }: {
   environmentId: EnvironmentId | undefined;
-  cwd: string | undefined;
+  threadId: ThreadId | undefined;
   source: ReviewDiffPreviewSource | null;
   baseRef: string | null;
   ignoreWhitespace: boolean;
@@ -180,7 +180,7 @@ function reviewFileQueries({
   const indices = requested.scope === scope ? requested.indices : DEFAULT_INDICES;
   const files = sortedReviewFiles(source);
   const queries =
-    !environmentId || !cwd || !source
+    !environmentId || !threadId || !source
       ? []
       : indices
           .filter((index) => index < files.length)
@@ -191,7 +191,7 @@ function reviewFileQueries({
               input: {
                 cacheKey: scope,
                 request: {
-                  cwd,
+                  threadId,
                   ...(baseRef ? { baseRef } : {}),
                   ignoreWhitespace,
                   file: {

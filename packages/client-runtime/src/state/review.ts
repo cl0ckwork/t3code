@@ -1,5 +1,5 @@
 import {
-  type ReviewDiffPreviewInput,
+  type ReviewDiffPreviewRequest,
   VcsUnsupportedOperationError,
   WS_METHODS,
 } from "@t3tools/contracts";
@@ -31,7 +31,9 @@ export function createReviewEnvironmentAtoms<R, E>(
       label: "environment-data:review:diff-file-patch",
       staleTimeMs: 5 * 60_000,
       execute: (input: {
-        request: ReviewDiffPreviewInput & { file: NonNullable<ReviewDiffPreviewInput["file"]> };
+        request: ReviewDiffPreviewRequest & {
+          file: NonNullable<ReviewDiffPreviewRequest["file"]>;
+        };
         cacheKey: string;
       }) =>
         request(WS_METHODS.reviewGetDiffPreview, input.request).pipe(

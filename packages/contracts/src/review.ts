@@ -7,10 +7,18 @@ import { VcsError } from "./vcs.ts";
  * Client request for a live diff. The server resolves the workspace from the
  * persisted thread instead of trusting a client-supplied filesystem path.
  */
+export const ReviewDiffPreviewFile = Schema.Struct({
+  path: Schema.NonEmptyString,
+  previousPath: Schema.NullOr(Schema.NonEmptyString),
+  sourceKind: Schema.Literals(["working-tree", "branch-range"]),
+});
+export type ReviewDiffPreviewFile = typeof ReviewDiffPreviewFile.Type;
+
 export const ReviewDiffPreviewRequest = Schema.Struct({
   threadId: ThreadId,
   baseRef: Schema.optional(TrimmedNonEmptyString),
   ignoreWhitespace: Schema.optionalKey(Schema.Boolean),
+  file: Schema.optionalKey(ReviewDiffPreviewFile),
 });
 export type ReviewDiffPreviewRequest = typeof ReviewDiffPreviewRequest.Type;
 
@@ -19,13 +27,7 @@ export const ReviewDiffPreviewInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
   baseRef: Schema.optional(TrimmedNonEmptyString),
   ignoreWhitespace: Schema.optionalKey(Schema.Boolean),
-  file: Schema.optionalKey(
-    Schema.Struct({
-      path: Schema.NonEmptyString,
-      previousPath: Schema.NullOr(Schema.NonEmptyString),
-      sourceKind: Schema.Literals(["working-tree", "branch-range"]),
-    }),
-  ),
+  file: Schema.optionalKey(ReviewDiffPreviewFile),
 });
 export type ReviewDiffPreviewInput = typeof ReviewDiffPreviewInput.Type;
 

@@ -280,7 +280,6 @@ export default function DiffPanel({
       : null,
   );
   const branchDiffPreview = primaryBranchDiffPreview;
-  const refreshBranchDiffPreview = branchDiffPreview.refresh;
   const canRefreshGitDiff = isGitRepo && selectedTurnId === null && activeThread != null;
   const activeThreadRefreshKey = routeThreadRef
     ? `${routeThreadRef.environmentId}:${routeThreadRef.threadId}`
@@ -407,7 +406,7 @@ export default function DiffPanel({
     loadNextFiles,
   } = useReviewFilePatches({
     environmentId: activeThread?.environmentId,
-    cwd: branchDiffPreview.data?.cwd,
+    threadId: activeThread?.id,
     source: lazySource,
     baseRef: lazySource?.baseRef ?? selectedBaseRef,
     ignoreWhitespace: diffIgnoreWhitespace,

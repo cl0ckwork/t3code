@@ -62,6 +62,7 @@ export const make = Effect.gen(function* () {
       cwd,
       ...(input.baseRef === undefined ? {} : { baseRef: input.baseRef }),
       ...(input.ignoreWhitespace === undefined ? {} : { ignoreWhitespace: input.ignoreWhitespace }),
+      ...(input.file === undefined ? {} : { file: input.file }),
     };
 
     const handle = yield* vcsRegistry.detect({ cwd, requestedKind: "auto" });

@@ -1,6 +1,6 @@
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import type { FileDiffMetadata } from "@pierre/diffs";
-import type { EnvironmentId, ReviewDiffPreviewSource } from "@t3tools/contracts";
+import type { EnvironmentId, ReviewDiffPreviewSource, ThreadId } from "@t3tools/contracts";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import * as Atom from "effect/unstable/reactivity/Atom";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -9,7 +9,7 @@ import { reviewEnvironment } from "~/state/review";
 
 export function useReviewFilePatches({
   environmentId,
-  cwd,
+  threadId,
   source,
   baseRef,
   ignoreWhitespace,
@@ -18,7 +18,7 @@ export function useReviewFilePatches({
   preview,
 }: {
   environmentId: EnvironmentId | undefined;
-  cwd: string | undefined;
+  threadId: ThreadId | undefined;
   source: ReviewDiffPreviewSource | null;
   baseRef: string | null;
   ignoreWhitespace: boolean;
@@ -29,7 +29,7 @@ export function useReviewFilePatches({
   const registry = useContext(RegistryContext);
   const scope = JSON.stringify([
     environmentId,
-    cwd,
+    threadId,
     source?.kind,
     source?.diffHash,
     baseRef,
@@ -49,7 +49,7 @@ export function useReviewFilePatches({
   );
   const queries = useMemo(
     () =>
-      !environmentId || !cwd || !source
+      !environmentId || !threadId || !source
         ? []
         : indices
             .filter((index) => index < files.length)
@@ -62,7 +62,7 @@ export function useReviewFilePatches({
                   input: {
                     cacheKey: scope,
                     request: {
-                      cwd,
+                      threadId,
                       ...(baseRef ? { baseRef } : {}),
                       ignoreWhitespace,
                       file: {
@@ -75,7 +75,7 @@ export function useReviewFilePatches({
                 }),
               };
             }),
-    [environmentId, cwd, source, files, indices, scope, baseRef, ignoreWhitespace],
+    [environmentId, threadId, source, files, indices, scope, baseRef, ignoreWhitespace],
   );
   const previousPreview = useRef({ scope, revision, queries: [] as typeof queries });
   useEffect(() => {

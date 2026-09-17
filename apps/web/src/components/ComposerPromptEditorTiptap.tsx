@@ -111,6 +111,8 @@ export interface ComposerPromptEditorProps {
    * literal character.
    */
   richTextEnabled?: boolean;
+  /** Render known `/skill` invocations as chips alongside currency-prefixed skills. */
+  renderSlashSkillChips?: boolean;
   /** Draft records behind the prompt's context references, keyed by context id. */
   contextRecords: ComposerDraftContextRecords;
   /** Structured clipboard payload for the given referenced ids, or null to skip. */
@@ -567,6 +569,7 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
     value,
     cursor,
     richTextEnabled,
+    renderSlashSkillChips,
     contextRecords,
     buildContextClipboardFragment,
     importContextFragment,
@@ -589,6 +592,13 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
   // The setting toggles styling, not the engine: both modes are Tiptap.
   // Plain mode disables the mark extensions, so markers stay literal text.
   const richText = richTextEnabled ?? false;
+  const knownSlashSkillNames = useMemo(
+    () => (renderSlashSkillChips ? new Set(skills.map((skill) => skill.name)) : undefined),
+    [renderSlashSkillChips, skills],
+  );
+  const slashSkillSignature = renderSlashSkillChips
+    ? skills.map((skill) => skill.name).join("\u001f")
+    : "";
 
   const onChangeRef = useRef(onChange);
   const onVisibleSelectionChangeRef = useRef(onVisibleSelectionChange);
@@ -647,6 +657,7 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
   const selectionRangeRef = useRef({ start: initialExpandedCursor, end: initialExpandedCursor });
   const isApplyingControlledUpdateRef = useRef(false);
   const hasAppliedControlledSelectionRef = useRef(false);
+  const previousSlashSkillSignatureRef = useRef(slashSkillSignature);
   const citationRequestRef = useRef<ComposerCitationCommentRequest | null>(null);
   const [openCitation, setOpenCitation] = useState<OpenCitationComment | null>(null);
   const [isEmpty, setIsEmpty] = useState(value.length === 0);
@@ -783,7 +794,10 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
             description: shortDescription || found.description?.trim() || null,
           };
         },
-        { styling: richText },
+        {
+          styling: richText,
+          ...(knownSlashSkillNames ? { knownSlashSkillNames } : {}),
+        },
       ),
       editable: !disabled,
       editorProps: {
@@ -1023,10 +1037,13 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
     hasAppliedControlledSelectionRef.current = true;
     const normalizedCursor = clampCollapsedComposerCursor(value, cursor);
     const previousSnapshot = snapshotRef.current;
+    const slashSkillsChanged = previousSlashSkillSignatureRef.current !== slashSkillSignature;
+    previousSlashSkillSignatureRef.current = slashSkillSignature;
     if (
       !initialSelection &&
       previousSnapshot.value === value &&
-      previousSnapshot.cursor === normalizedCursor
+      previousSnapshot.cursor === normalizedCursor &&
+      !slashSkillsChanged
     ) {
       return;
     }
@@ -1044,15 +1061,26 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
     setIsEmpty(value.length === 0);
     const rootElement = editor.view.dom;
     const isFocused = Boolean(rootElement && document.activeElement === rootElement);
-    if (!initialSelection && previousSnapshot.value === value && !isFocused) return;
+    if (
+      !initialSelection &&
+      previousSnapshot.value === value &&
+      !isFocused &&
+      !slashSkillsChanged
+    ) {
+      return;
+    }
 
     isApplyingControlledUpdateRef.current = true;
     const pendingCitation =
       citationRequestRef.current?.value === value ? citationRequestRef.current : null;
-    if (previousSnapshot.value !== value) {
-      editor.commands.setContent(buildDocJson(value, skillLabelFor, { styling: richText }), {
-        emitUpdate: false,
-      });
+    if (previousSnapshot.value !== value || slashSkillsChanged) {
+      editor.commands.setContent(
+        buildDocJson(value, skillLabelFor, {
+          styling: richText,
+          ...(knownSlashSkillNames ? { knownSlashSkillNames } : {}),
+        }),
+        { emitUpdate: false },
+      );
     }
     const map = serializeEditorDoc(editor.state.doc);
     const flat = collapsedToFlat(map, normalizedCursor);
@@ -1081,7 +1109,7 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
     queueMicrotask(() => {
       isApplyingControlledUpdateRef.current = false;
     });
-  }, [cursor, editor, richText, skillLabelFor, value]);
+  }, [cursor, editor, knownSlashSkillNames, richText, skillLabelFor, slashSkillSignature, value]);
 
   const focusAt = useCallback(
     (nextCursor: number) => {

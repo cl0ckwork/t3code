@@ -1095,6 +1095,74 @@ describe("CheckpointReactor", () => {
     ).toBe(false);
   });
 
+  effectIt.effect("reports a changed sibling worktree when the checkpoint is empty", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() =>
+        createHarness({ seedFilesystemCheckpoints: false, threadWorktreePath: null }),
+      );
+      const candidateCwd = NodeFS.mkdtempSync(
+        NodePath.join(NodeOS.tmpdir(), "t3-checkpoint-drift-"),
+      );
+      tempDirs.push(candidateCwd);
+      runGit(harness.cwd, ["worktree", "add", "-b", "feature/candidate", candidateCwd]);
+
+      const threadId = ThreadId.make("thread-1");
+      const turnId = asTurnId("turn-workspace-drift");
+      const createdAt = "2026-01-01T00:00:00.000Z";
+      harness.provider.emit({
+        type: "turn.started",
+        eventId: EventId.make("evt-workspace-drift-start"),
+        provider: ProviderDriverKind.make("codex"),
+        createdAt,
+        threadId,
+        turnId,
+      });
+      expect(yield* harness.nextReceipt).toMatchObject({ type: "checkpoint.baseline.captured" });
+      yield* Effect.promise(harness.drain);
+
+      NodeFS.writeFileSync(
+        NodePath.join(candidateCwd, "candidate.ts"),
+        "export const candidate = 1;\n",
+      );
+
+      harness.provider.emit({
+        type: "turn.diff.updated",
+        eventId: EventId.make("evt-workspace-drift-diff"),
+        provider: ProviderDriverKind.make("codex"),
+        createdAt,
+        threadId,
+        turnId,
+        payload: { unifiedDiff: "diff --git a/candidate.ts b/candidate.ts" },
+      });
+      harness.provider.emit({
+        type: "turn.completed",
+        eventId: EventId.make("evt-workspace-drift-complete"),
+        provider: ProviderDriverKind.make("codex"),
+        createdAt,
+        threadId,
+        turnId,
+        payload: { state: "completed" },
+      });
+      yield* Effect.promise(harness.drain);
+
+      const thread = (yield* Effect.promise(harness.readModel)).threads.find(
+        (entry) => entry.id === threadId,
+      );
+      expect(thread?.checkpoints.find((checkpoint) => checkpoint.turnId === turnId)).toMatchObject({
+        files: [],
+      });
+      expect(
+        thread?.activities.find((activity) => activity.kind === "workspace.drift.detected"),
+      ).toMatchObject({
+        payload: {
+          expectedCwd: harness.cwd,
+          candidateWorktreePath: NodeFS.realpathSync.native(candidateCwd),
+          candidateBranch: "feature/candidate",
+        },
+      });
+    }),
+  );
+
   it("refreshes local git status state on turn completion using the session cwd", async () => {
     const gitStatusRefreshCalls: string[] = [];
     const harness = await createHarness({

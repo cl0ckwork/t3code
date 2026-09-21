@@ -540,6 +540,23 @@ const EMPTY_PROVIDERS: ServerProvider[] = [];
 const EMPTY_USAGE_LIMIT_SOURCES: UsageLimitSourceSnapshots = [];
 const EMPTY_PROVIDER_SKILLS: ServerProvider["skills"] = [];
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
+function resolveWorkspaceDriftCandidate(
+  activities: ReadonlyArray<OrchestrationThreadActivity>,
+): { readonly branch: string; readonly worktreePath: string } | null {
+  for (const activity of activities.toReversed()) {
+    if (activity.kind !== "workspace.drift.detected") continue;
+    const payload = activity.payload;
+    if (typeof payload !== "object" || payload === null || Array.isArray(payload)) continue;
+    const candidate = payload as Record<string, unknown>;
+    const candidateBranch = candidate.candidateBranch;
+    const candidateWorktreePath = candidate.candidateWorktreePath;
+    if (typeof candidateBranch === "string" && typeof candidateWorktreePath === "string") {
+      return { branch: candidateBranch, worktreePath: candidateWorktreePath };
+    }
+  }
+  return null;
+}
+
 function useDraftHeroLayoutTransition(
   isDraftHeroState: boolean,
   animationsActive: boolean,
@@ -5822,6 +5839,10 @@ export default function ChatView(props: ChatViewProps) {
   }, []);
 
   const activeWorktreePath = activeThread?.worktreePath ?? null;
+  const workspaceDriftCandidate = useMemo(
+    () => resolveWorkspaceDriftCandidate(activeThread?.activities ?? EMPTY_ACTIVITIES),
+    [activeThread?.activities],
+  );
   const derivedEnvMode: DraftThreadEnvMode = resolveEffectiveEnvMode({
     activeWorktreePath,
     hasServerThread: isServerThread,
@@ -10149,6 +10170,7 @@ export default function ChatView(props: ChatViewProps) {
                                   : {})}
                                 envLocked={envLocked}
                                 onComposerFocusRequest={scheduleComposerFocus}
+                                workspaceDriftCandidate={workspaceDriftCandidate}
                                 {...(canCheckoutPullRequestIntoThread
                                   ? { onCheckoutPullRequestRequest: openPullRequestDialog }
                                   : {})}

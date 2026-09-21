@@ -35,6 +35,27 @@ Keep these invariants on rebase:
 - A missing or unreadable thread returns a typed workspace error. It must not silently diff a
   different repository.
 
+## Workspace drift warning
+
+An older/root-bound thread can retain the project checkout while the provider reports a change
+made in a sibling worktree. That leaves the turn with an empty T3 checkpoint even though the
+provider's native diff is non-empty. Treat this as workspace drift rather than silently rebinding
+the thread: a client must never make an implicit filesystem choice on the user's behalf.
+
+[`CheckpointReactor.ts`](../../apps/server/src/orchestration/Layers/CheckpointReactor.ts) records
+the root checkout's sibling-worktree inventory at turn start. At completion it emits a durable
+`workspace.drift.detected` activity only when all of these hold:
+
+- the provider reported a non-empty native diff;
+- T3's checkpoint for that turn has no files; and
+- exactly one sibling worktree changed its HEAD or porcelain status during the turn.
+
+The composer context strip renders this as a warning control. It opens the existing server-backed
+branch/worktree picker, where the user explicitly selects the proposed worktree; T3 persists that
+selection through the normal thread metadata path. Never accept a candidate path from the client,
+and never auto-rebind merely because a sibling changed. Dedicated worktree threads are already
+scoped correctly, so the inventory runs only for root-bound threads.
+
 ## Workspace-scoped provider skills
 
 T3 Code's provider snapshot is global process state, but a repository skill belongs to the active

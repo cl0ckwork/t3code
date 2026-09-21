@@ -40,6 +40,7 @@ import type { OrchestrationDispatchError } from "../Errors.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import * as WorkspaceEntries from "../../workspace/WorkspaceEntries.ts";
 import * as PullRequestService from "../../pullRequest/PullRequestService.ts";
+import * as VcsDriverRegistry from "../../vcs/VcsDriverRegistry.ts";
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 
@@ -77,6 +78,43 @@ function checkpointStatusFromRuntime(status: string | undefined): "ready" | "mis
   }
 }
 
+interface GitWorktreeSnapshot {
+  readonly path: string;
+  readonly branch: string | null;
+  readonly head: string | null;
+  readonly status: string | null;
+}
+
+interface TurnWorkspaceSnapshot {
+  readonly turnId: TurnId;
+  readonly cwd: string;
+  readonly worktrees: ReadonlyArray<GitWorktreeSnapshot>;
+}
+
+function parseGitWorktreeList(stdout: string): ReadonlyArray<GitWorktreeSnapshot> {
+  const worktrees: GitWorktreeSnapshot[] = [];
+  for (const record of stdout.trim().split("\n\n")) {
+    const fields = new Map(
+      record.split("\n").flatMap((line) => {
+        const separator = line.indexOf(" ");
+        return separator === -1
+          ? []
+          : [[line.slice(0, separator), line.slice(separator + 1)] as const];
+      }),
+    );
+    const path = fields.get("worktree");
+    if (!path) continue;
+    const branchRef = fields.get("branch");
+    worktrees.push({
+      path,
+      branch: branchRef?.startsWith("refs/heads/") ? branchRef.slice("refs/heads/".length) : null,
+      head: fields.get("HEAD") ?? null,
+      status: null,
+    });
+  }
+  return worktrees;
+}
+
 const make = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
   const randomUUID = crypto.randomUUIDv4;
@@ -93,6 +131,7 @@ const make = Effect.gen(function* () {
   const path = yield* Path.Path;
   const vcsStatusBroadcaster = yield* VcsStatusBroadcaster;
   const pullRequests = yield* PullRequestService.PullRequestService;
+  const vcsRegistry = yield* VcsDriverRegistry.VcsDriverRegistry;
   const queuedEntryRefreshes = new Set<string>();
   const entryRefreshWorker = yield* makeDrainableWorker((cwd: string) =>
     Effect.sync(() => queuedEntryRefreshes.delete(cwd)).pipe(
@@ -113,7 +152,60 @@ const make = Effect.gen(function* () {
   });
 
   const startedTurns = new Map<ThreadId, TurnId>();
+  const providerDiffs = new Map<
+    ThreadId,
+    { readonly turnId: TurnId; readonly unifiedDiff: string }
+  >();
+  const turnWorkspaceSnapshots = new Map<ThreadId, TurnWorkspaceSnapshot>();
   const pending = new Set<ThreadId>();
+
+  const listGitWorktrees = Effect.fn("listGitWorktrees")(function* (cwd: string) {
+    const handle = yield* vcsRegistry.resolve({ cwd });
+    if (handle.kind !== "git") return [];
+    const result = yield* handle.driver.execute({
+      operation: "CheckpointReactor.listGitWorktrees",
+      cwd,
+      args: ["worktree", "list", "--porcelain"],
+    });
+    return yield* Effect.forEach(
+      parseGitWorktreeList(result.stdout),
+      (worktree) =>
+        handle.driver
+          .execute({
+            operation: "CheckpointReactor.readGitWorktreeStatus",
+            cwd: worktree.path,
+            args: ["status", "--porcelain=v1", "-z"],
+          })
+          .pipe(
+            Effect.map((status) => ({ ...worktree, status: status.stdout })),
+            // A status snapshot refines drift detection; failure to inspect one
+            // sibling must not make checkpointing fail for the whole turn.
+            Effect.catch(() => Effect.succeed(worktree)),
+          ),
+      { concurrency: 4 },
+    );
+  });
+
+  const recordTurnWorkspaceSnapshot = Effect.fn("recordTurnWorkspaceSnapshot")(function* (input: {
+    readonly threadId: ThreadId;
+    readonly turnId: TurnId;
+  }) {
+    const thread = yield* resolveThreadDetail(input.threadId);
+    if (!thread) return;
+    const projects = yield* resolveThreadProjects(thread.projectId);
+    const cwd = yield* resolveCheckpointCwd({
+      threadId: input.threadId,
+      thread,
+      projects,
+      preferSessionRuntime: true,
+    });
+    // Dedicated worktrees are already the durable workspace boundary. This
+    // extra inventory is for legacy/root-bound threads, where checkpoints can
+    // otherwise silently follow the shared project checkout.
+    if (!cwd || thread.worktreePath !== null || cwd !== projects[0]?.workspaceRoot) return;
+    const worktrees = yield* listGitWorktrees(cwd).pipe(Effect.catch(() => Effect.succeed([])));
+    turnWorkspaceSnapshots.set(input.threadId, { turnId: input.turnId, cwd, worktrees });
+  });
 
   const appendRevertFailureActivity = (input: {
     readonly threadId: ThreadId;
@@ -169,6 +261,41 @@ const make = Effect.gen(function* () {
             summary: "Checkpoint capture failed",
             payload: {
               detail: input.detail,
+            },
+            turnId: input.turnId,
+            createdAt: input.createdAt,
+          },
+          createdAt: input.createdAt,
+        }),
+      ),
+    );
+
+  const appendWorkspaceDriftActivity = (input: {
+    readonly threadId: ThreadId;
+    readonly turnId: TurnId;
+    readonly expectedCwd: string;
+    readonly candidate: GitWorktreeSnapshot;
+    readonly createdAt: string;
+  }) =>
+    Effect.all({
+      commandId: serverCommandId("workspace-drift-detected"),
+      activityId: serverEventId,
+    }).pipe(
+      Effect.flatMap(({ commandId, activityId }) =>
+        orchestrationEngine.dispatch({
+          type: "thread.activity.append",
+          commandId,
+          threadId: input.threadId,
+          activity: {
+            id: activityId,
+            tone: "error",
+            kind: "workspace.drift.detected",
+            summary: "Workspace drift detected",
+            payload: {
+              expectedCwd: input.expectedCwd,
+              candidateWorktreePath: input.candidate.path,
+              candidateBranch: input.candidate.branch,
+              candidateHead: input.candidate.head,
             },
             turnId: input.turnId,
             createdAt: input.createdAt,
@@ -254,6 +381,8 @@ const make = Effect.gen(function* () {
     readonly turnCount: number;
     readonly status: "ready" | "missing" | "error";
     readonly assistantMessageId: MessageId | undefined;
+    readonly providerReportedChanges: boolean;
+    readonly workspaceSnapshot: TurnWorkspaceSnapshot | undefined;
     readonly createdAt: string;
   }) {
     const fromTurnCount = Math.max(0, input.turnCount - 1);
@@ -352,6 +481,38 @@ const make = Effect.gen(function* () {
       checkpointTurnCount: input.turnCount,
       createdAt: input.createdAt,
     });
+    if (
+      input.providerReportedChanges &&
+      files.length === 0 &&
+      input.workspaceSnapshot?.turnId === input.turnId
+    ) {
+      const currentWorktrees = yield* listGitWorktrees(input.workspaceSnapshot.cwd).pipe(
+        Effect.catch(() => Effect.succeed([])),
+      );
+      const headsBefore = new Map(
+        input.workspaceSnapshot.worktrees.map((worktree) => [worktree.path, worktree.head]),
+      );
+      const statusBefore = new Map(
+        input.workspaceSnapshot.worktrees.map((worktree) => [worktree.path, worktree.status]),
+      );
+      const changedCandidates = currentWorktrees.filter(
+        (worktree) =>
+          worktree.path !== input.workspaceSnapshot?.cwd &&
+          worktree.branch !== null &&
+          worktree.head !== null &&
+          (headsBefore.get(worktree.path) !== worktree.head ||
+            (worktree.status !== null && statusBefore.get(worktree.path) !== worktree.status)),
+      );
+      if (changedCandidates.length === 1) {
+        yield* appendWorkspaceDriftActivity({
+          threadId: input.threadId,
+          turnId: input.turnId,
+          expectedCwd: input.workspaceSnapshot.cwd,
+          candidate: changedCandidates[0]!,
+          createdAt: input.createdAt,
+        });
+      }
+    }
     yield* receiptBus.publish({
       type: "checkpoint.diff.finalized",
       threadId: input.threadId,
@@ -441,6 +602,10 @@ const make = Effect.gen(function* () {
       const nextTurnCount = existingPlaceholder
         ? existingPlaceholder.checkpointTurnCount
         : currentTurnCount + 1;
+      const providerDiff = providerDiffs.get(event.threadId);
+      const workspaceSnapshot = turnWorkspaceSnapshots.get(event.threadId);
+      providerDiffs.delete(event.threadId);
+      turnWorkspaceSnapshots.delete(event.threadId);
 
       yield* captureAndDispatchCheckpoint({
         threadId: thread.id,
@@ -453,6 +618,9 @@ const make = Effect.gen(function* () {
             ? "ready"
             : checkpointStatusFromRuntime(event.payload.state),
         assistantMessageId: existingPlaceholder?.assistantMessageId ?? undefined,
+        providerReportedChanges:
+          providerDiff?.turnId === turnId && providerDiff.unifiedDiff.trim().length > 0,
+        workspaceSnapshot: workspaceSnapshot?.turnId === turnId ? workspaceSnapshot : undefined,
         createdAt: event.createdAt,
       });
     },
@@ -938,7 +1106,17 @@ const make = Effect.gen(function* () {
   ) {
     if (event.type === "session.exited") {
       startedTurns.delete(event.threadId);
+      providerDiffs.delete(event.threadId);
+      turnWorkspaceSnapshots.delete(event.threadId);
       pending.delete(event.threadId);
+      return;
+    }
+
+    if (event.type === "turn.diff.updated") {
+      const turnId = toTurnId(event.turnId);
+      if (turnId !== null && event.payload.unifiedDiff.trim().length > 0) {
+        providerDiffs.set(event.threadId, { turnId, unifiedDiff: event.payload.unifiedDiff });
+      }
       return;
     }
 
@@ -953,6 +1131,11 @@ const make = Effect.gen(function* () {
         pending.delete(event.threadId);
       }
       yield* ensurePreTurnBaselineFromTurnStart(event);
+      if (turnId !== null) {
+        yield* recordTurnWorkspaceSnapshot({ threadId: event.threadId, turnId }).pipe(
+          Effect.catch(() => Effect.void),
+        );
+      }
       return;
     }
 
@@ -1042,6 +1225,7 @@ const make = Effect.gen(function* () {
           event.type !== "turn.started" &&
           event.type !== "turn.completed" &&
           event.type !== "turn.aborted" &&
+          event.type !== "turn.diff.updated" &&
           event.type !== "session.exited"
         ) {
           return Effect.void;

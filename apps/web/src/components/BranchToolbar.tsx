@@ -1,6 +1,7 @@
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import {
+  AlertTriangleIcon,
   ChevronDownIcon,
   FolderGit2Icon,
   FolderGitIcon,
@@ -88,6 +89,10 @@ interface BranchToolbarProps {
   onEnvironmentChange?: (environmentId: EnvironmentId) => void;
   composerControlsHostRef?: (element: HTMLDivElement | null) => void;
   contextStripVisible?: boolean;
+  workspaceDriftCandidate?: {
+    readonly branch: string;
+    readonly worktreePath: string;
+  } | null;
 }
 
 interface MobileRunContextSelectorProps {
@@ -525,6 +530,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   onEnvironmentChange,
   composerControlsHostRef,
   contextStripVisible = true,
+  workspaceDriftCandidate = null,
 }: BranchToolbarProps) {
   const branchSelectorRef = useRef<BranchToolbarBranchSelectorHandle>(null);
   const threadRef = useMemo(
@@ -615,6 +621,32 @@ export const BranchToolbar = memo(function BranchToolbar({
   const [stripElement, setStripElement] = useState<HTMLDivElement | null>(null);
   const labelsOverflow = useLabelsOverflow(stripElement);
 
+  const renderWorkspaceDriftControl = () => {
+    if (!workspaceDriftCandidate || activeWorktreePath === workspaceDriftCandidate.worktreePath) {
+      return null;
+    }
+    return (
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Workspace drift detected"
+              onClick={() => branchSelectorRef.current?.open()}
+            >
+              <AlertTriangleIcon className="size-3.5 text-warning" />
+            </Button>
+          }
+        />
+        <TooltipPopup side="top" className="max-w-80 whitespace-normal leading-tight">
+          This turn changed {workspaceDriftCandidate.branch} in another worktree. Open the branch
+          picker and select it to attach this thread to the correct workspace.
+        </TooltipPopup>
+      </Tooltip>
+    );
+  };
+
   if (!hasActiveThread || !activeProject) return null;
 
   return (
@@ -649,6 +681,7 @@ export const BranchToolbar = memo(function BranchToolbar({
             previousWorktreeBranch={previousWorktreeSeed?.branch ?? null}
             onUsePreviousWorktree={onUsePreviousWorktree}
           />
+          {renderWorkspaceDriftControl()}
         </div>
       ) : null}
       {showGitControls || showEnvironmentIndicator ? (
@@ -690,6 +723,7 @@ export const BranchToolbar = memo(function BranchToolbar({
               onUsePreviousWorktree={onUsePreviousWorktree}
             />
           ) : null}
+          {renderWorkspaceDriftControl()}
         </div>
       ) : null}
 

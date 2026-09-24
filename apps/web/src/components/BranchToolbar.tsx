@@ -50,6 +50,7 @@ import {
   THREAD_DETAILS_PANEL_LOCKED_ROW_CLASS,
 } from "./chat/threadDetailsPanelStyles";
 import { ComposerControl } from "./chat/ComposerControl";
+import { Button } from "./ui/button";
 import {
   Menu,
   MenuGroup,

@@ -2912,8 +2912,8 @@ export default function ChatView(props: ChatViewProps) {
       : JSON.stringify([activityId, latestCheckpointCompletedAt]);
   }, [latestCheckpointCompletedAt, threadActivities]);
   const activeContextWindow = useMemo(
-    () => deriveLatestContextWindowSnapshot(threadActivities),
-    [threadActivities],
+    () => deriveLatestContextWindowSnapshot(threadActivities, { provider: selectedProvider }),
+    [selectedProvider, threadActivities],
   );
   const workLogEntries = useMemo(() => deriveWorkLogEntries(threadActivities), [threadActivities]);
   // Native subagent fold: memoized by activity-list identity, shared by the
@@ -6444,6 +6444,7 @@ export default function ChatView(props: ChatViewProps) {
     if (
       !activeThread ||
       !activeContextWindow ||
+      !activeContextWindow.contextUsageAvailable ||
       resumeCompactionKey === null ||
       dismissedResumeCompactionKeys.has(resumeCompactionKey) ||
       resumeCompactionPermanentlyDismissed ||

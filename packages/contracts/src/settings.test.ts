@@ -620,15 +620,11 @@ describe("ClientSettings sidebar", () => {
   });
 });
 
-describe("ClientSettings context window meter", () => {
-  it("defaults off and preserves an explicit legacy opt-in", () => {
-    expect(decodeClientSettings({}).contextWindowMeterEnabled).toBe(false);
-    expect(
-      decodeClientSettings({ contextWindowMeterEnabled: true }).contextWindowMeterEnabled,
-    ).toBe(true);
-    expect(
-      decodeClientSettingsPatch({ contextWindowMeterEnabled: true }).contextWindowMeterEnabled,
-    ).toBe(true);
+describe("ClientSettings usage meter", () => {
+  it("defaults on and preserves an explicit opt-out", () => {
+    expect(decodeClientSettings({}).usageMeterEnabled).toBe(true);
+    expect(decodeClientSettings({ usageMeterEnabled: false }).usageMeterEnabled).toBe(false);
+    expect(decodeClientSettingsPatch({ usageMeterEnabled: false }).usageMeterEnabled).toBe(false);
   });
 });
 

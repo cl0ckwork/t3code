@@ -262,6 +262,11 @@ export type ThreadMetadataUpdatedPayload = typeof ThreadMetadataUpdatedPayload.T
 
 export const ThreadTokenUsageSnapshot = Schema.Struct({
   usedTokens: NonNegativeInt,
+  /**
+   * False when the provider reports per-turn or cumulative token accounting,
+   * but does not expose the live context currently retained by the thread.
+   */
+  contextUsageAvailable: Schema.optional(Schema.Boolean),
   totalProcessedTokens: Schema.optional(NonNegativeInt),
   maxTokens: Schema.optional(PositiveInt),
   inputTokens: Schema.optional(NonNegativeInt),

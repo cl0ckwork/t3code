@@ -452,6 +452,9 @@ function normalizeCodexTokenUsage(
 
   return {
     usedTokens,
+    // Codex's app-server usage notification reports the latest response and
+    // cumulative processed tokens, not the live post-compaction context.
+    contextUsageAvailable: false,
     ...(totalProcessedTokens !== undefined && totalProcessedTokens > usedTokens
       ? { totalProcessedTokens }
       : {}),

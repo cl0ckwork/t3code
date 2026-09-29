@@ -27,6 +27,7 @@ export type ContextWindowSnapshot = NullableContextWindowUsage & {
 
 export function deriveLatestContextWindowSnapshot(
   activities: ReadonlyArray<OrchestrationThreadActivity>,
+  options?: { readonly provider?: string | null },
 ): ContextWindowSnapshot | null {
   for (let index = activities.length - 1; index >= 0; index -= 1) {
     const activity = activities[index];
@@ -41,14 +42,23 @@ export function deriveLatestContextWindowSnapshot(
     }
 
     const maxTokens = asFiniteNumber(payload?.maxTokens);
+    // Older persisted Codex activities predate the explicit flag. The provider
+    // is still enough to avoid presenting its last response as live context.
+    const contextUsageAvailable =
+      asBoolean(payload?.contextUsageAvailable) !== false && options?.provider !== "codex";
     const usedPercentage =
-      maxTokens !== null && maxTokens > 0 ? Math.min(100, (usedTokens / maxTokens) * 100) : null;
+      contextUsageAvailable && maxTokens !== null && maxTokens > 0
+        ? Math.min(100, (usedTokens / maxTokens) * 100)
+        : null;
     const remainingTokens =
-      maxTokens !== null ? Math.max(0, Math.round(maxTokens - usedTokens)) : null;
+      contextUsageAvailable && maxTokens !== null
+        ? Math.max(0, Math.round(maxTokens - usedTokens))
+        : null;
     const remainingPercentage = usedPercentage !== null ? Math.max(0, 100 - usedPercentage) : null;
 
     return {
       usedTokens,
+      contextUsageAvailable,
       totalProcessedTokens: asFiniteNumber(payload?.totalProcessedTokens),
       maxTokens,
       remainingTokens,

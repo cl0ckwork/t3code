@@ -83,4 +83,37 @@ describe("contextWindow", () => {
     expect(snapshot?.usedTokens).toBe(81_659);
     expect(snapshot?.totalProcessedTokens).toBe(748_126);
   });
+
+  it("does not turn Codex's latest response usage into a context percentage", () => {
+    const snapshot = deriveLatestContextWindowSnapshot([
+      makeActivity("activity-1", "context-window.updated", {
+        usedTokens: 126,
+        totalProcessedTokens: 11_839,
+        maxTokens: 258_400,
+        contextUsageAvailable: false,
+      }),
+    ]);
+
+    expect(snapshot).toMatchObject({
+      contextUsageAvailable: false,
+      usedPercentage: null,
+      remainingTokens: null,
+    });
+  });
+
+  it("treats persisted Codex telemetry as thread usage before the explicit flag existed", () => {
+    const snapshot = deriveLatestContextWindowSnapshot(
+      [
+        makeActivity("activity-1", "context-window.updated", {
+          usedTokens: 126,
+          totalProcessedTokens: 11_839,
+          maxTokens: 258_400,
+        }),
+      ],
+      { provider: "codex" },
+    );
+
+    expect(snapshot?.contextUsageAvailable).toBe(false);
+    expect(snapshot?.usedPercentage).toBeNull();
+  });
 });

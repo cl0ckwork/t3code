@@ -59,4 +59,35 @@ describe("ContextWindowMeter", () => {
     expect(markup).toContain(">Send or clear your draft before compacting<");
     expect(markup).not.toContain('aria-label="Send or clear your draft before compacting"');
   });
+
+  it("shows Codex's latest request as an explicitly estimated context meter", () => {
+    const codexUsage = deriveLatestContextWindowSnapshot([
+      {
+        id: EventId.make("activity-codex"),
+        tone: "info",
+        kind: "context-window.updated",
+        summary: "Usage updated",
+        payload: {
+          usedTokens: 126,
+          totalProcessedTokens: 11_839,
+          maxTokens: 258_400,
+          lastUsedTokens: 126,
+          contextUsageAvailable: false,
+        },
+        turnId: TurnId.make("turn-codex"),
+        createdAt: "2026-08-24T12:00:00.000Z",
+      },
+    ]);
+
+    if (!codexUsage) {
+      throw new Error("The Codex usage test fixture did not produce a snapshot.");
+    }
+
+    const markup = renderToStaticMarkup(<ContextWindowMeter usage={codexUsage} />);
+    expect(markup).toContain("Last request context");
+    expect(markup).toContain("Estimate");
+    expect(markup).toContain("Estimated from the most recent model request");
+    expect(markup).toContain('aria-label="Estimated context usage"');
+    expect(markup).toContain('role="progressbar"');
+  });
 });

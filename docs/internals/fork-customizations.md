@@ -148,6 +148,32 @@ collects project-scoped title context before generation. Keep the initial-title 
 rules aligned. The important regression is a thread changing title to its latest operational
 follow-up instead of retaining its original durable subject.
 
+## Composer context and thread usage
+
+The composer status control is enabled by default and distinguishes exact live context from an
+explicitly labelled last-request estimate. It must never use a cumulative thread total as context.
+
+- Claude reports active context usage, so it retains the circular meter and percentage.
+- Codex app-server does not report current post-compaction context. It does report the total token
+  use of the most recent model request, whose input, output, and reasoning tokens count against
+  that request's context window. The fork displays this as an explicitly labelled estimate; it
+  must never be presented as live context or replaced with the cumulative thread total.
+
+[`providerRuntime.ts`](../../packages/contracts/src/providerRuntime.ts) carries this distinction
+as `contextUsageAvailable`. Codex sets it to `false` in
+[`CodexAdapter.ts`](../../apps/server/src/provider/Layers/CodexAdapter.ts); Claude's active-usage
+snapshots follow the existing live-context path. The web derivation also recognizes old Codex
+activities that predate the field, so an existing thread is corrected immediately after upgrade.
+[`ContextWindowMeter.tsx`](../../apps/web/src/components/chat/ContextWindowMeter.tsx) owns the two
+presentations. Any automatic resume-compaction prompt requires live context and is suppressed for
+Codex accounting telemetry. The Codex estimate remains actionable for an explicit compact, but
+must retain its uncertainty label.
+
+The control uses the new `usageMeterEnabled` client preference, defaulting to `true`. Do not reuse
+the upstream `contextWindowMeterEnabled` preference: it was a legacy, default-off switch and may
+already be persisted as `false` in an existing browser profile. Retain that old field only for
+settings decoding compatibility.
+
 ## Sidebar grouping and ordering
 
 The sidebar exposes grouping and ordering controls beside the project scope control. Grouping is a

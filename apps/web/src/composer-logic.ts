@@ -1,5 +1,6 @@
 import type { ClientSettings } from "@t3tools/contracts/settings";
 import type { AssistantCitation, ResolvedKeybindingsConfig } from "@t3tools/contracts";
+import { isComposerMarkdownCodePosition } from "@t3tools/shared/composerInlineTokens";
 import {
   serializeAssistantCitation,
   withAssistantCitationComment,
@@ -243,6 +244,9 @@ export function isCollapsedCursorAdjacentToInlineToken(
 
 export function detectComposerTrigger(text: string, cursorInput: number): ComposerTrigger | null {
   const cursor = clampCursor(text, cursorInput);
+  if (isComposerMarkdownCodePosition(text, cursor)) {
+    return null;
+  }
   const lineStart = text.lastIndexOf("\n", Math.max(0, cursor - 1)) + 1;
   const linePrefix = text.slice(lineStart, cursor);
 

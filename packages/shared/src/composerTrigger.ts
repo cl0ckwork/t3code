@@ -1,3 +1,5 @@
+import { isComposerMarkdownCodePosition } from "./composerInlineTokens.ts";
+
 export type ComposerTriggerKind =
   | "path"
   | "pull-request"
@@ -58,6 +60,9 @@ export function detectComposerTrigger(
   isWhitespaceChar?: (char: string) => boolean,
 ): ComposerTrigger | null {
   const cursor = clampCursor(text, cursorInput);
+  if (isComposerMarkdownCodePosition(text, cursor)) {
+    return null;
+  }
   const lineStart = text.lastIndexOf("\n", Math.max(0, cursor - 1)) + 1;
   const linePrefix = text.slice(lineStart, cursor);
 

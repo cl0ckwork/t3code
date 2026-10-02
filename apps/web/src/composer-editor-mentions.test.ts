@@ -222,6 +222,14 @@ describe("splitPromptIntoComposerSegments", () => {
     ]);
   });
 
+  it("keeps skill-looking Markdown code literal", () => {
+    expect(splitPromptIntoComposerSegments("Use ` $eq ` then $review ")).toEqual([
+      { type: "text", text: "Use ` $eq ` then " },
+      { type: "skill", name: "review", source: "$review" },
+      { type: "text", text: " " },
+    ]);
+  });
+
   it("splits digit-leading skill tokens into skill segments", () => {
     expect(splitPromptIntoComposerSegments("Use $2spec please")).toEqual([
       { type: "text", text: "Use " },

@@ -15,6 +15,14 @@ describe("detectComposerTrigger", () => {
       });
     },
   );
+
+  it("does not open composer menus inside Markdown code", () => {
+    const inlineCode = "Check `$eq";
+    expect(detectComposerTrigger(inlineCode, inlineCode.length)).toBeNull();
+
+    const fencedCode = "```json\n$eq";
+    expect(detectComposerTrigger(fencedCode, fencedCode.length)).toBeNull();
+  });
 });
 
 describe("serializeComposerFileLink", () => {

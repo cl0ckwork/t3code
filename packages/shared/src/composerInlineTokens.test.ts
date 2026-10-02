@@ -67,6 +67,28 @@ describe("collectComposerInlineTokens", () => {
     expect(collectComposerInlineTokens("Inspect @AGENTS.md")).toEqual([]);
   });
 
+  it("keeps composer syntax literal in Markdown code", () => {
+    expect(collectComposerInlineTokens("Use ` $eq ` alongside $review ")).toEqual([
+      {
+        type: "skill",
+        value: "review",
+        source: "$review",
+        start: 22,
+        end: 29,
+      },
+    ]);
+
+    expect(collectComposerInlineTokens("```json\n$eq\n```\nUse $review ")).toEqual([
+      {
+        type: "skill",
+        value: "review",
+        source: "$review",
+        start: 20,
+        end: 27,
+      },
+    ]);
+  });
+
   it("only converts known slash skills when a frontend opts in", () => {
     expect(
       collectComposerInlineTokens("Run /review then /plan ", {

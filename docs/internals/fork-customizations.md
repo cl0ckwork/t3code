@@ -106,7 +106,8 @@ Skills are structured inline selections, not text substitutions. The composer ac
 `/skill-name` and `$skill-name`, displays selected skills as purple chips, supports selecting more
 than one skill, and leaves subsequent text as ordinary prompt text. Picker labels use
 `Title Case (skill-name): description` so a human-readable name and canonical invocation are both
-visible.
+visible. Markdown inline code and fenced code blocks are always literal, so snippets such as
+`$eq` cannot become skill selections or reach send-time skill validation.
 
 The parsing and inline-token contract is shared in
 [`composerInlineTokens.ts`](../../packages/shared/src/composerInlineTokens.ts) and

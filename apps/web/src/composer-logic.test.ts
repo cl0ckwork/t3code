@@ -247,6 +247,14 @@ describe("detectComposerTrigger", () => {
     },
   );
 
+  it("does not open composer menus inside Markdown code", () => {
+    const inlineCode = "Check `$eq";
+    expect(detectComposerTrigger(inlineCode, inlineCode.length)).toBeNull();
+
+    const fencedCode = "```json\n$eq";
+    expect(detectComposerTrigger(fencedCode, fencedCode.length)).toBeNull();
+  });
+
   it("detects a pull request number at a token boundary", () => {
     const text = "Compare this with #8737";
 

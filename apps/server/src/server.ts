@@ -372,13 +372,12 @@ const layerProjectCloneTracker = ProjectCloneTracker.layer.pipe(
   Layer.provide(layerSourceControlRepositoryService),
 );
 
-const layerKnownWorkspaces = KnownWorkspaces.layer.pipe(
-  Layer.provide(ProjectStore.layer),
-  Layer.provide(GitVcsDriver.layer),
-);
-
 const layerReview = ReviewService.layer.pipe(
-  Layer.provideMerge(layerKnownWorkspaces),
+  // Review requests resolve their workspace through V2 projections. Keep the
+  // stores local to this read-only service; they share the runtime SqlClient
+  // and avoid coupling the VCS layer to orchestration runtime construction.
+  Layer.provideMerge(ProjectionStoreV2.layer),
+  Layer.provideMerge(ProjectStore.layer),
   Layer.provideMerge(GitVcsDriver.layer),
   Layer.provideMerge(layerVcsDriverRegistry),
 );

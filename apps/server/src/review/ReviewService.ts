@@ -16,7 +16,8 @@ import {
   type ReviewDiffPreviewResult,
 } from "@t3tools/contracts";
 
-import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as ProjectStoreV2 from "../orchestration-v2/ProjectStore.ts";
+import * as ProjectionStoreV2 from "../orchestration-v2/ProjectionStore.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 
@@ -34,24 +35,34 @@ export class ReviewService extends Context.Service<
 
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
-  const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
+  const projectStore = yield* ProjectStoreV2.ProjectStoreV2;
+  const projectionStore = yield* ProjectionStoreV2.ProjectionStoreV2;
   const vcsRegistry = yield* VcsDriverRegistry.VcsDriverRegistry;
   const git = yield* GitVcsDriver.GitVcsDriver;
 
   const resolveThreadWorkspace = Effect.fn("ReviewService.resolveThreadWorkspace")(function* (
     threadId: ReviewDiffPreviewRequest["threadId"],
   ) {
-    const context = yield* projectionSnapshotQuery
-      .getThreadCheckpointContext(threadId)
+    const projection = yield* projectionStore
+      .getThreadProjection(threadId)
+      .pipe(
+        Effect.mapError((cause) =>
+          cause._tag === "ProjectionStoreThreadNotFoundError"
+            ? new ReviewWorkspaceUnavailableError({ threadId, reason: "not-found" })
+            : new ReviewWorkspaceUnavailableError({ threadId, reason: "unavailable" }),
+        ),
+      );
+    const project = yield* projectStore
+      .get(projection.thread.projectId)
       .pipe(
         Effect.mapError(
           () => new ReviewWorkspaceUnavailableError({ threadId, reason: "unavailable" }),
         ),
       );
-    if (Option.isNone(context)) {
-      return yield* new ReviewWorkspaceUnavailableError({ threadId, reason: "not-found" });
+    if (Option.isNone(project)) {
+      return yield* new ReviewWorkspaceUnavailableError({ threadId, reason: "unavailable" });
     }
-    return context.value.worktreePath ?? context.value.workspaceRoot;
+    return projection.thread.worktreePath ?? project.value.workspaceRoot;
   });
 
   const getDiffPreview: ReviewService["Service"]["getDiffPreview"] = Effect.fn(

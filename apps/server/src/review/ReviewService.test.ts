@@ -1,24 +1,49 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
+import { type OrchestrationV2ThreadProjection, ProjectId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
-import * as PlatformError from "effect/PlatformError";
+import * as Option from "effect/Option";
 
-import * as ServerConfig from "../config.ts";
-import * as ServerSettings from "../serverSettings.ts";
+import * as ProjectStoreV2 from "../orchestration-v2/ProjectStore.ts";
+import * as ProjectionStoreV2 from "../orchestration-v2/ProjectionStore.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 import * as ReviewService from "./ReviewService.ts";
 
-function layer(input: {
+const threadId = ThreadId.make("review-thread");
+const projectId = ProjectId.make("review-project");
+
+const projectionFor = (worktreePath: string | null) =>
+  ({ thread: { projectId, worktreePath } }) as unknown as OrchestrationV2ThreadProjection;
+
+const projectFor = (workspaceRoot: string) =>
+  ({
+    workspaceRoot,
+  }) as unknown as ProjectStoreV2.ProjectRow;
+
+function makeLayer(input: {
   readonly workspaceRoot: string;
-  readonly baseDir: string;
+  readonly worktreePath: string | null;
   readonly detectCalls?: Array<{ readonly cwd: string }>;
-  readonly worktreesDirectory?: string;
-  readonly previousWorktreesDirectories?: ReadonlyArray<string>;
 }) {
   return ReviewService.layer.pipe(
+    Layer.provide(
+      Layer.mock(ProjectionStoreV2.ProjectionStoreV2)({
+        getThreadProjection: (requestedThreadId) =>
+          requestedThreadId === threadId
+            ? Effect.succeed(projectionFor(input.worktreePath))
+            : Effect.fail(
+                new ProjectionStoreV2.ProjectionStoreThreadNotFoundError({
+                  threadId: requestedThreadId,
+                }),
+              ),
+      }),
+    ),
+    Layer.provide(
+      Layer.mock(ProjectStoreV2.ProjectStoreV2)({
+        get: () => Effect.succeedSome(projectFor(input.workspaceRoot)),
+      }),
+    ),
     Layer.provide(
       Layer.mock(VcsDriverRegistry.VcsDriverRegistry)({
         get: () => Effect.die("unexpected VCS registry get"),
@@ -31,54 +56,61 @@ function layer(input: {
       }),
     ),
     Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
-    Layer.provide(
-      ServerSettings.ServerSettingsService.layerTest({
-        worktreesDirectory: input.worktreesDirectory ?? "",
-        previousWorktreesDirectories: [...(input.previousWorktreesDirectories ?? [])],
-      }),
-    ),
-    Layer.provide(ServerConfig.layerTest(input.workspaceRoot, input.baseDir)),
-    Layer.provideMerge(NodeServices.layer),
   );
 }
 
 describe("ReviewService", () => {
-  it.effect("rejects diff preview cwd outside the configured workspace roots", () =>
+  it.effect("resolves a preview from the persisted worktree instead of a server cwd", () =>
     Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const workspaceRoot = yield* fs.makeTempDirectoryScoped({ prefix: "t3-review-workspace-" });
-      const outsideRoot = yield* fs.makeTempDirectoryScoped({ prefix: "t3-review-outside-" });
-      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-review-base-" });
       const detectCalls: Array<{ readonly cwd: string }> = [];
-
-      const error = yield* Effect.gen(function* () {
+      const result = yield* Effect.gen(function* () {
         const review = yield* ReviewService.ReviewService;
-        return yield* review.getDiffPreview({ cwd: outsideRoot }).pipe(Effect.flip);
-      }).pipe(Effect.provide(layer({ workspaceRoot, baseDir, detectCalls })));
-
-      assert.strictEqual(error._tag, "VcsRepositoryDetectionError");
-      assert.strictEqual(error.operation, "ReviewService.getDiffPreview");
-      assert.match(
-        "detail" in error ? error.detail : "",
-        /must stay within the configured workspace root/,
+        return yield* review.getDiffPreview({ threadId });
+      }).pipe(
+        Effect.provide(
+          makeLayer({
+            workspaceRoot: "/projects/pogo-service",
+            worktreePath: "/worktrees/pogo-service/feature-diff",
+            detectCalls,
+          }),
+        ),
       );
-      assert.deepStrictEqual(detectCalls, []);
-    }).pipe(Effect.provide(NodeServices.layer)),
+
+      assert.strictEqual(result.cwd, "/worktrees/pogo-service/feature-diff");
+      assert.deepStrictEqual(result.sources, []);
+      assert.deepStrictEqual(detectCalls, [{ cwd: "/worktrees/pogo-service/feature-diff" }]);
+    }),
   );
 
-  it.effect("attributes file-content workspace violations to the file-content operation", () =>
+  it.effect("uses the project workspace when the thread has no worktree", () =>
     Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const workspaceRoot = yield* fs.makeTempDirectoryScoped({ prefix: "t3-review-workspace-" });
-      const outsideRoot = yield* fs.makeTempDirectoryScoped({ prefix: "t3-review-outside-" });
-      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-review-base-" });
       const detectCalls: Array<{ readonly cwd: string }> = [];
+      const result = yield* Effect.gen(function* () {
+        const review = yield* ReviewService.ReviewService;
+        return yield* review.getDiffPreview({ threadId });
+      }).pipe(
+        Effect.provide(
+          makeLayer({
+            workspaceRoot: "/projects/pogo-service",
+            worktreePath: null,
+            detectCalls,
+          }),
+        ),
+      );
 
+      assert.strictEqual(result.cwd, "/projects/pogo-service");
+      assert.deepStrictEqual(detectCalls, [{ cwd: "/projects/pogo-service" }]);
+    }),
+  );
+
+  it.effect("rejects a diff request for a missing thread before VCS detection", () =>
+    Effect.gen(function* () {
+      const detectCalls: Array<{ readonly cwd: string }> = [];
       const error = yield* Effect.gen(function* () {
         const review = yield* ReviewService.ReviewService;
         return yield* review
           .getDiffFileContents({
-            cwd: outsideRoot,
+            threadId: ThreadId.make("missing-thread"),
             sourceKind: "working-tree",
             changeType: "change",
             baseRef: "HEAD",
@@ -87,91 +119,21 @@ describe("ReviewService", () => {
             newPath: "file.ts",
           })
           .pipe(Effect.flip);
-      }).pipe(Effect.provide(layer({ workspaceRoot, baseDir, detectCalls })));
-
-      assert.strictEqual(error._tag, "VcsRepositoryDetectionError");
-      assert.strictEqual(error.operation, "ReviewService.getDiffFileContents");
-      assert.match(
-        "detail" in error ? error.detail : "",
-        /must stay within the configured workspace root/,
-      );
-      assert.deepStrictEqual(detectCalls, []);
-    }).pipe(Effect.provide(NodeServices.layer)),
-  );
-
-  it.effect("allows previous custom worktree locations but never a filesystem root", () =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const workspaceRoot = yield* fs.makeTempDirectoryScoped({ prefix: "t3-review-workspace-" });
-      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-review-base-" });
-      const previous = yield* fs.makeTempDirectoryScoped({ prefix: "t3-review-old-worktrees-" });
-      const outsideRoot = yield* fs.makeTempDirectoryScoped({ prefix: "t3-review-outside-" });
-
-      const result = yield* Effect.gen(function* () {
-        const review = yield* ReviewService.ReviewService;
-        return yield* review.getDiffPreview({ cwd: previous });
       }).pipe(
         Effect.provide(
-          layer({
-            workspaceRoot,
-            baseDir,
-            worktreesDirectory: "/",
-            previousWorktreesDirectories: [previous],
+          makeLayer({
+            workspaceRoot: "/projects/pogo-service",
+            worktreePath: null,
+            detectCalls,
           }),
         ),
       );
-      assert.strictEqual(result.cwd, previous);
 
-      const rootLink = `${baseDir}/root-link`;
-      yield* fs.symlink("/", rootLink);
-      for (const worktreesDirectory of ["/", rootLink]) {
-        const error = yield* Effect.gen(function* () {
-          const review = yield* ReviewService.ReviewService;
-          return yield* review.getDiffPreview({ cwd: outsideRoot }).pipe(Effect.flip);
-        }).pipe(Effect.provide(layer({ workspaceRoot, baseDir, worktreesDirectory })));
-        assert.strictEqual(error._tag, "VcsRepositoryDetectionError");
+      assert.strictEqual(error._tag, "ReviewWorkspaceUnavailableError");
+      if (error._tag === "ReviewWorkspaceUnavailableError") {
+        assert.strictEqual(error.reason, "not-found");
       }
-    }).pipe(Effect.provide(NodeServices.layer)),
-  );
-
-  it.effect("allows diff preview cwd inside the configured workspace root", () =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const workspaceRoot = yield* fs.makeTempDirectoryScoped({ prefix: "t3-review-workspace-" });
-      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-review-base-" });
-      const detectCalls: Array<{ readonly cwd: string }> = [];
-
-      const result = yield* Effect.gen(function* () {
-        const review = yield* ReviewService.ReviewService;
-        return yield* review.getDiffPreview({ cwd: workspaceRoot });
-      }).pipe(Effect.provide(layer({ workspaceRoot, baseDir, detectCalls })));
-
-      assert.strictEqual(result.cwd, workspaceRoot);
-      assert.deepStrictEqual(result.sources, []);
-      assert.deepStrictEqual(detectCalls, [{ cwd: workspaceRoot }]);
-    }).pipe(Effect.provide(NodeServices.layer)),
-  );
-
-  it.effect("preserves unexpected path-resolution failures", () =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const workspaceRoot = yield* fs.makeTempDirectoryScoped({ prefix: "t3-review-workspace-" });
-      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-review-base-" });
-      const invalidCwd = `${workspaceRoot}\0invalid`;
-      const detectCalls: Array<{ readonly cwd: string }> = [];
-
-      const error = yield* Effect.gen(function* () {
-        const review = yield* ReviewService.ReviewService;
-        return yield* review.getDiffPreview({ cwd: invalidCwd }).pipe(Effect.flip);
-      }).pipe(Effect.provide(layer({ workspaceRoot, baseDir, detectCalls })));
-
-      assert.strictEqual(error._tag, "VcsRepositoryDetectionError");
-      if (error._tag !== "VcsRepositoryDetectionError") return;
-      assert.strictEqual(error.operation, "ReviewService.assertWorkspaceBoundCwd.canonicalizePath");
-      assert.strictEqual(error.cwd, invalidCwd);
-      assert.match(error.detail, /Failed to resolve a path/);
-      assert.instanceOf(error.cause, PlatformError.PlatformError);
       assert.deepStrictEqual(detectCalls, []);
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }),
   );
 });

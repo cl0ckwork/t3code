@@ -26,6 +26,7 @@ describe("projectScripts helpers", () => {
         command: "pnpm dev",
         icon: "debug",
         runOnWorktreeCreate: false,
+        runOnThreadSettle: false,
         waitForSetup: false,
         runOnSettle: false,
         previewUrl: "http://localhost:5733",
@@ -49,6 +50,7 @@ describe("projectScripts helpers", () => {
         command: "pnpm test",
         icon: "test",
         runOnWorktreeCreate: false,
+        runOnThreadSettle: false,
         waitForSetup: false,
         runOnSettle: false,
         previewUrl: null,
@@ -68,6 +70,7 @@ describe("projectScripts helpers", () => {
       name: "Setup",
       command: "pnpm i",
       icon: "configure",
+      runOnThreadSettle: false,
       previewUrl: null,
       autoOpenPreview: false,
       runOnSettle: false,
@@ -81,6 +84,24 @@ describe("projectScripts helpers", () => {
     expect(
       buildProjectScript("setup", { ...input, runOnWorktreeCreate: false, waitForSetup: true }),
     ).not.toHaveProperty("async");
+  });
+
+  it("records a lifecycle trigger only when the action opts into settlement", () => {
+    const input = {
+      name: "Cleanup preview",
+      command: "pnpm cleanup-preview",
+      icon: "configure" as const,
+      runOnWorktreeCreate: false,
+      waitForSetup: false,
+      previewUrl: null,
+      autoOpenPreview: false,
+    };
+    expect(buildProjectScript("cleanup", { ...input, runOnThreadSettle: true })).toMatchObject({
+      lifecycleTriggers: ["thread.settled"],
+    });
+    expect(
+      buildProjectScript("cleanup", { ...input, runOnThreadSettle: false }),
+    ).not.toHaveProperty("lifecycleTriggers");
   });
 
   it("builds and parses script run commands", () => {

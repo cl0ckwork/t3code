@@ -104,6 +104,17 @@ export const OrchestrationEffectRequestV2 = Schema.Union([
     attachmentIds: Schema.Array(Schema.String),
   }),
   Schema.Struct({
+    type: Schema.Literal("thread-lifecycle.run"),
+    trigger: Schema.Literal("thread.settled"),
+    actionId: Schema.String,
+    actionName: Schema.String,
+    command: Schema.String,
+    /** Workspace values are captured at the durable settlement transition. */
+    cwd: Schema.String,
+    projectRoot: Schema.String,
+    worktreePath: Schema.NullOr(Schema.String),
+  }),
+  Schema.Struct({
     type: Schema.Literal("thread-title.generate"),
     kind: Schema.Union([
       Schema.Struct({ type: Schema.Literal("initial"), messageId: MessageId }),
@@ -135,6 +146,9 @@ export const PROCESS_BOUND_EFFECT_TYPES = [
   "provider-turn.steer",
   "provider-turn.restart",
   "runtime-request.respond",
+  // A shell may already have performed external cleanup when the server dies.
+  // Cancel rather than replaying and running the command twice.
+  "thread-lifecycle.run",
 ] as const satisfies ReadonlyArray<OrchestrationEffectRequestV2["type"]>;
 
 export const OrchestrationEffectStatusV2 = Schema.Literals([

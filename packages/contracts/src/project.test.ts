@@ -14,6 +14,7 @@ import {
   ProjectCreatePayload,
   ProjectUpdatePayload,
   ProjectMutation,
+  ProjectScript,
   ProjectSearchContentsError,
   ProjectSearchContentsInput,
   ProjectSearchEntriesError,
@@ -24,6 +25,7 @@ import {
 const decodeProjectCreatePayload = Schema.decodeUnknownSync(ProjectCreatePayload);
 const decodeProjectUpdatePayload = Schema.decodeUnknownSync(ProjectUpdatePayload);
 const decodeProjectMutation = Schema.decodeUnknownSync(ProjectMutation);
+const decodeProjectScript = Schema.decodeUnknownSync(ProjectScript);
 const decodeSearchEntriesInput = Schema.decodeUnknownSync(ProjectSearchEntriesInput);
 const decodeSearchContentsInput = Schema.decodeUnknownSync(ProjectSearchContentsInput);
 
@@ -123,6 +125,23 @@ describe("project RPC errors", () => {
 });
 
 describe("shared project payloads", () => {
+  it("defaults legacy project actions to no lifecycle triggers", () => {
+    const legacy = decodeProjectScript({
+      id: "cleanup",
+      name: "Cleanup",
+      command: "pnpm cleanup",
+      icon: "configure",
+      runOnWorktreeCreate: false,
+    });
+    const triggered = decodeProjectScript({
+      ...legacy,
+      lifecycleTriggers: ["thread.settled"],
+    });
+
+    expect(legacy.lifecycleTriggers).toEqual([]);
+    expect(triggered.lifecycleTriggers).toEqual(["thread.settled"]);
+  });
+
   it("preserves omitted, false, and null values through RPC envelopes", () => {
     const create = decodeProjectCreatePayload({
       title: " Example ",

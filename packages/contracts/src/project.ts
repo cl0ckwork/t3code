@@ -1,5 +1,6 @@
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
+import * as Effect from "effect/Effect";
 import { RepositoryIdentity, ThreadEnvMode } from "./environment.ts";
 import { ModelSelection } from "./modelSelection.ts";
 import {
@@ -30,12 +31,25 @@ export const ProjectScriptIcon = Schema.Literals([
 ]);
 export type ProjectScriptIcon = typeof ProjectScriptIcon.Type;
 
+/** A server-owned lifecycle transition that can launch a project action. */
+export const ProjectScriptLifecycleTrigger = Schema.Literals(["thread.settled"]);
+export type ProjectScriptLifecycleTrigger = typeof ProjectScriptLifecycleTrigger.Type;
+
 export const ProjectScript = Schema.Struct({
   id: TrimmedNonEmptyString,
   name: TrimmedNonEmptyString,
   command: TrimmedNonEmptyString,
   icon: ProjectScriptIcon,
   runOnWorktreeCreate: Schema.Boolean,
+  /**
+   * Automatic action triggers. Actions remain runnable manually; this only
+   * adds a server-side invocation after a matching lifecycle transition.
+   */
+  lifecycleTriggers: Schema.optionalKey(
+    Schema.Array(ProjectScriptLifecycleTrigger).pipe(
+      Schema.withDecodingDefault(Effect.succeed([])),
+    ),
+  ),
   /** Start the agent while setup runs unless explicitly disabled. */
   async: Schema.optional(Schema.Boolean),
   previewUrl: Schema.optional(TrimmedNonEmptyString),

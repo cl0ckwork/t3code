@@ -1,4 +1,5 @@
 import { CommandId } from "@t3tools/contracts";
+import { projectScriptRuntimeEnv } from "@t3tools/shared/projectScripts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -27,6 +28,7 @@ import * as RuntimeRequestService from "./RuntimeRequestService.ts";
 import * as ThreadTitleRegenerationService from "./ThreadTitleRegenerationService.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import * as TerminalManager from "../terminal/Manager.ts";
 import { continueRestartedRun } from "./RestartContinuation.ts";
 
 export class OrchestrationEffectExecutionError extends Schema.TaggedError<OrchestrationEffectExecutionError>()(
@@ -104,6 +106,11 @@ export const layerExecutor: Layer.Layer<
       yield* ThreadTitleRegenerationService.ThreadTitleRegenerationService;
     const threads = yield* ThreadManagementService.ThreadManagementService;
     const settings = yield* ServerSettings.ServerSettingsService;
+    // Terminal support is intentionally optional in the base orchestration
+    // layer: focused command tests do not construct the UI terminal runtime.
+    // The production server supplies it, and a lifecycle effect fails visibly
+    // rather than silently skipping its cleanup command if it is absent.
+    const terminals = yield* Effect.serviceOption(TerminalManager.TerminalManager);
     return OrchestrationEffectExecutorV2.of({
       execute: (effect, options) => {
         const willRetry = options?.willRetry ?? false;
@@ -450,6 +457,55 @@ export const layerExecutor: Layer.Layer<
                   }),
               ),
             );
+          case "thread-lifecycle.run": {
+            // Capture the discriminated request before entering Effect.gen;
+            // TypeScript does not preserve property narrowing across the lazy
+            // generator boundary.
+            const request = effect.request;
+            return Effect.gen(function* () {
+              if (Option.isNone(terminals)) {
+                return yield* new OrchestrationEffectExecutionError({
+                  effectId: effect.id,
+                  effectType: effect.request.type,
+                  cause: new Error(
+                    "Terminal service is unavailable for the thread lifecycle action.",
+                  ),
+                });
+              }
+              const terminalId = `hook-${effect.id.replaceAll(/[^a-zA-Z0-9_-]/g, "-")}`.slice(
+                0,
+                120,
+              );
+              yield* terminals.value.open({
+                threadId: effect.threadId,
+                terminalId,
+                cwd: request.cwd,
+                worktreePath: request.worktreePath,
+                env: {
+                  ...projectScriptRuntimeEnv({
+                    project: { cwd: request.projectRoot },
+                    worktreePath: request.worktreePath,
+                  }),
+                  NO_COLOR: "1",
+                  FORCE_COLOR: "0",
+                },
+              });
+              yield* terminals.value.write({
+                threadId: effect.threadId,
+                terminalId,
+                data: `${request.command}\r`,
+              });
+            }).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new OrchestrationEffectExecutionError({
+                    effectId: effect.id,
+                    effectType: effect.request.type,
+                    cause,
+                  }),
+              ),
+            );
+          }
           case "thread-title.generate":
             return threadTitleRegeneration
               .execute({

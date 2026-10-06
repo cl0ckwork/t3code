@@ -85,6 +85,7 @@ export interface NewProjectScriptInput {
   command: string;
   icon: ProjectScriptIcon;
   runOnWorktreeCreate: boolean;
+  runOnThreadSettle: boolean;
   /** Setup scripts only: hold the agent until the script exits. */
   waitForSetup: boolean;
   keybinding: string | null;
@@ -101,6 +102,7 @@ export const EMPTY_PROJECT_SCRIPT_INPUT: NewProjectScriptInput = {
   command: "",
   icon: "play",
   runOnWorktreeCreate: false,
+  runOnThreadSettle: false,
   waitForSetup: false,
   keybinding: null,
   previewUrl: null,
@@ -126,6 +128,7 @@ export function editorRequestForScript(
       command: script.command,
       icon: script.icon,
       runOnWorktreeCreate: script.runOnWorktreeCreate,
+      runOnThreadSettle: script.lifecycleTriggers?.includes("thread.settled") ?? false,
       waitForSetup: script.runOnWorktreeCreate && script.async === false,
       keybinding: keybindingValueForCommand(keybindings, commandForProjectScript(script.id)),
       previewUrl: script.previewUrl ?? null,
@@ -162,6 +165,7 @@ export function ProjectScriptEditorDialog({
   const [icon, setIcon] = useState<ProjectScriptIcon>("play");
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [runOnWorktreeCreate, setRunOnWorktreeCreate] = useState(false);
+  const [runOnThreadSettle, setRunOnThreadSettle] = useState(false);
   const [waitForSetup, setWaitForSetup] = useState(false);
   const [keybinding, setKeybinding] = useState("");
   const [previewUrl, setPreviewUrl] = useState("");
@@ -193,6 +197,7 @@ export function ProjectScriptEditorDialog({
     setIcon(request.initial.icon);
     setIconPickerOpen(false);
     setRunOnWorktreeCreate(request.initial.runOnWorktreeCreate);
+    setRunOnThreadSettle(request.initial.runOnThreadSettle);
     setWaitForSetup(request.initial.waitForSetup);
     setKeybinding(request.initial.keybinding ?? "");
     setPreviewUrl(request.initial.previewUrl ?? "");
@@ -253,6 +258,7 @@ export function ProjectScriptEditorDialog({
         command: trimmedCommand,
         icon,
         runOnWorktreeCreate,
+        runOnThreadSettle,
         waitForSetup: runOnWorktreeCreate && waitForSetup,
         keybinding: keybindingRule?.key ?? null,
         previewUrl: trimmedPreviewUrl.length > 0 ? trimmedPreviewUrl : null,
@@ -413,6 +419,18 @@ export function ProjectScriptEditorDialog({
                     checked={waitForSetup}
                     disabled={!runOnWorktreeCreate}
                     onCheckedChange={(checked) => setWaitForSetup(Boolean(checked))}
+                  />
+                </label>
+                <label className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2 text-sm dark:border-transparent dark:bg-white/[0.035]">
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span>Run automatically when a thread settles</span>
+                    <span className="text-xs text-muted-foreground">
+                      Runs in the thread workspace after manual or automatic settlement.
+                    </span>
+                  </span>
+                  <Switch
+                    checked={runOnThreadSettle}
+                    onCheckedChange={(checked) => setRunOnThreadSettle(Boolean(checked))}
                   />
                 </label>
                 <label

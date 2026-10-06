@@ -2,7 +2,7 @@ import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 
 import { ThreadEnvMode, WorktreeSubmodules } from "./environment.ts";
-import { ProjectScriptIcon } from "./project.ts";
+import { ProjectScriptIcon, ProjectScriptLifecycleTrigger } from "./project.ts";
 import type { ProjectScopedServerSettingKey, ServerSettings } from "./settings.ts";
 
 /** File name of the checked-in T3 project file, resolved at the workspace root. */
@@ -41,6 +41,12 @@ export const T3ProjectFileScript = Schema.Struct({
     Schema.Boolean.annotate({
       description:
         "When true, the script runs automatically after a worktree is created for a new thread.",
+    }),
+  ),
+  lifecycleTriggers: Schema.optionalKey(
+    Schema.Array(ProjectScriptLifecycleTrigger).annotate({
+      description:
+        "Server-side lifecycle events that run this script automatically. The script remains available to run manually.",
     }),
   ),
   async: Schema.optionalKey(

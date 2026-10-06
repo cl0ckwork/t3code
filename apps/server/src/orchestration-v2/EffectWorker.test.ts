@@ -30,6 +30,7 @@ import * as RuntimeRequestService from "./RuntimeRequestService.ts";
 import * as ThreadTitleRegenerationService from "./ThreadTitleRegenerationService.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import * as TerminalManager from "../terminal/Manager.ts";
 
 const threadId = ThreadId.make("thread:effect-worker-restart");
 const oldSessionId = ProviderSessionId.make("provider-session:effect-worker-restart:old");
@@ -82,6 +83,7 @@ function layerExecutorFor(input: {
   readonly threads?: Partial<ThreadManagementService.ThreadManagementService["Service"]>;
   readonly continueAfterRestart?: boolean;
   readonly interrupt?: ProviderTurnControlService.ProviderTurnControlServiceV2Shape["interrupt"];
+  readonly terminal?: Partial<TerminalManager.TerminalManager["Service"]>;
 }) {
   const record = (event: string) => Ref.update(input.events, (events) => [...events, event]);
   const layerDependencies = Layer.mergeAll(
@@ -147,10 +149,17 @@ function layerExecutorFor(input: {
       }),
     ),
   );
+  const dependenciesWithOptionalTerminal =
+    input.terminal === undefined
+      ? layerDependencies
+      : Layer.merge(
+          layerDependencies,
+          Layer.mock(TerminalManager.TerminalManager)(input.terminal),
+        );
   return EffectWorker.layerExecutor.pipe(
     Layer.provide(
       Layer.mergeAll(
-        layerDependencies,
+        dependenciesWithOptionalTerminal,
         Layer.mock(ThreadManagementService.ThreadManagementService)(input.threads ?? {}),
         ServerSettings.layerTest(
           input.continueAfterRestart === true ? { continueThreadsAfterServerUpdate: true } : {},
@@ -227,6 +236,73 @@ it.effect("settles a stopped run when its adapter has already lost the native tu
       });
     }).pipe(Effect.provide(layer));
     assert.deepEqual(yield* Ref.get(events), ["thread.background-work.settle"]);
+  }),
+);
+
+it.effect("runs a settlement action in the workspace captured by its outbox item", () =>
+  Effect.gen(function* () {
+    const now = DateTime.formatIso(yield* DateTime.now);
+    const events = yield* Ref.make<ReadonlyArray<string>>([]);
+    const opened = yield* Ref.make<
+      Parameters<TerminalManager.TerminalManager["Service"]["open"]>[0] | null
+    >(null);
+    const written = yield* Ref.make<
+      Parameters<TerminalManager.TerminalManager["Service"]["write"]>[0] | null
+    >(null);
+    const effect: EffectOutbox.OrchestrationEffectV2 = {
+      id: "effect:thread-lifecycle:cleanup",
+      commandId: CommandId.make("command:thread-lifecycle:cleanup"),
+      threadId,
+      request: {
+        type: "thread-lifecycle.run",
+        trigger: "thread.settled",
+        actionId: "cleanup",
+        actionName: "Cleanup preview",
+        command: "pnpm cleanup-preview",
+        cwd: "/workspace/feature-worktree",
+        projectRoot: "/workspace/project",
+        worktreePath: "/workspace/feature-worktree",
+      },
+      status: "running",
+      attemptCount: 1,
+      availableAt: now,
+      leaseOwner: "test-worker",
+      leaseExpiresAt: now,
+      createdAt: now,
+      updatedAt: now,
+      completedAt: null,
+      lastError: null,
+    };
+    const layer = layerExecutorFor({
+      events,
+      terminal: {
+        open: (input) => Ref.set(opened, input).pipe(Effect.as({} as never)),
+        write: (input) => Ref.set(written, input),
+      },
+    });
+
+    yield* Effect.gen(function* () {
+      const executor = yield* EffectWorker.OrchestrationEffectExecutorV2;
+      yield* executor.execute(effect);
+    }).pipe(Effect.provide(layer));
+
+    assert.deepEqual(yield* Ref.get(opened), {
+      threadId,
+      terminalId: "hook-effect-thread-lifecycle-cleanup",
+      cwd: "/workspace/feature-worktree",
+      worktreePath: "/workspace/feature-worktree",
+      env: {
+        T3CODE_PROJECT_ROOT: "/workspace/project",
+        T3CODE_WORKTREE_PATH: "/workspace/feature-worktree",
+        NO_COLOR: "1",
+        FORCE_COLOR: "0",
+      },
+    });
+    assert.deepEqual(yield* Ref.get(written), {
+      threadId,
+      terminalId: "hook-effect-thread-lifecycle-cleanup",
+      data: "pnpm cleanup-preview\r",
+    });
   }),
 );
 

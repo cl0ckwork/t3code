@@ -55,6 +55,7 @@ import {
   type TurnItemId,
 } from "@t3tools/contracts";
 import { modelSelectionsEqual } from "@t3tools/shared/model";
+import { resolveProjectScripts } from "@t3tools/shared/projectScripts";
 import {
   derivePendingBackgroundWork,
   pendingBackgroundTurnItems,
@@ -72,6 +73,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import * as ProjectStore from "./ProjectStore.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import {
   isCheckpointRestoreIsolated,
   SHARED_WORKSPACE_RESTORE_MESSAGE,
@@ -779,6 +781,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   const commandReceipts = yield* CommandReceiptStoreV2;
   const idAllocator = yield* IdAllocatorV2;
   const projects = yield* ProjectStore.ProjectStoreV2;
+  // Settings are optional for the small focused orchestration harnesses. A
+  // production runtime always provides them; without them, project-owned
+  // actions still work but environment-default actions cannot be resolved.
+  const settings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
   const projectionStore = yield* ProjectionStoreV2;
   const effectOutbox = yield* EffectOutbox.EffectOutboxV2;
   const nextTurnItemOrdinal = (
@@ -3222,6 +3228,47 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           type: "regenerate",
         }),
       ]);
+    }
+
+    // Settlement is durable before lifecycle work begins. Only an active → settled
+    // transition gets hooks: duplicate Settle commands and a pinned settled thread
+    // must never execute cleanup twice.
+    if (
+      command.type === "thread.settle" &&
+      (thread.settledOverride !== "settled" || thread.settledAt === null)
+    ) {
+      const project = yield* projects.get(thread.projectId).pipe(mapDispatchError(command));
+      if (Option.isSome(project) && project.value.deletedAt === null) {
+        const projectScripts = Option.isSome(settings)
+          ? resolveProjectScripts(
+              yield* settings.value.getSettings.pipe(mapDispatchError(command)),
+              { id: project.value.projectId, scripts: project.value.scripts },
+            )
+          : project.value.scripts;
+        yield* Ref.update(effects, (existing) => [
+          ...existing,
+          ...projectScripts
+            .filter((script) => script.lifecycleTriggers?.includes("thread.settled"))
+            .map(
+              (script) =>
+                ({
+                  id: `effect:${command.commandId}:thread-lifecycle.run:${script.id}`,
+                  commandId: command.commandId,
+                  threadId: command.threadId,
+                  request: {
+                    type: "thread-lifecycle.run",
+                    trigger: "thread.settled",
+                    actionId: script.id,
+                    actionName: script.name,
+                    command: script.command,
+                    cwd: thread.worktreePath ?? project.value.workspaceRoot,
+                    projectRoot: project.value.workspaceRoot,
+                    worktreePath: thread.worktreePath,
+                  },
+                }) satisfies PendingOrchestrationEffectV2,
+            ),
+        ]);
+      }
     }
 
     if (command.type === "thread.archive") {

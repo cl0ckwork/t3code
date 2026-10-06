@@ -140,6 +140,31 @@ List-motion is deliberately disabled while grouping is enabled. Its sortable-lay
 not include group headers, so animating a status or worktree transition can leave stale cloned
 headers in the DOM. Ungrouped mode keeps the existing row and drag-release animations.
 
+## Project action lifecycle hooks
+
+Project actions can be invoked manually, on worktree creation, or after a thread settles. The
+settlement trigger applies to both user-initiated and automatic settlement, but exactly once per
+real active-to-settled transition. Repeating Settle on an already settled thread must not launch a
+second cleanup action; an explicit unsettle followed by a later settle is a new transition and may
+launch it again.
+
+The trigger is stored in [`ProjectScript`](../../packages/contracts/src/project.ts) as an extensible
+`lifecycleTriggers` list. The action editor exposes the current `thread.settled` trigger, imports it
+from `t3.json`, and shows `on settle` in the actions list. More lifecycle events can use the same
+contract without adding another action type.
+
+The execution boundary is deliberately durable. [`Orchestrator.ts`](../../apps/server/src/orchestration-v2/Orchestrator.ts)
+captures the chosen action and `thread.worktreePath ?? project.workspaceRoot` in the outbox item
+that commits with the settlement event. [`EffectWorker.ts`](../../apps/server/src/orchestration-v2/EffectWorker.ts)
+starts the action in that captured workspace only after commit. Never accept a client cwd or
+re-resolve a later action configuration at execution time: cleanup must run once against the
+workspace and command the user actually settled.
+
+The lifecycle effect is not replay-safe after process loss. Once the worker has started a shell,
+replaying could run external cleanup twice. A normal terminal-start failure remains retryable and
+visible through the outbox; an interrupted in-flight hook is cancelled instead of silently
+duplicating it.
+
 ## Pull-request refresh safety
 
 Pull-request polling was disruptive to active review: a detail refresh changed the revision token,

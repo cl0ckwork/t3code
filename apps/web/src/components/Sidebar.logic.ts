@@ -1,4 +1,5 @@
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
+import { isTemporaryWorktreeBranch } from "@t3tools/shared/git";
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import { threadPullRequestSearchTerms } from "@t3tools/shared/threadPullRequests";
 import * as React from "react";
@@ -1062,12 +1063,18 @@ export const SIDEBAR_THREAD_GROUP_ORDER_LABELS: Record<SidebarThreadGroupOrder, 
   name: "Name",
 };
 
+function displayWorktreeBranch(branch: string | null): string | null {
+  const trimmed = branch?.trim();
+  return trimmed && !isTemporaryWorktreeBranch(trimmed) ? trimmed : null;
+}
+
 const SIDEBAR_THREAD_STATUS_GROUP_LABELS: Record<SidebarThreadStatus, string> = {
   approval: "Needs approval",
   input: "Needs input",
   working: "Working",
-  monitoring: "Monitoring",
+  waiting: "Monitoring",
   failed: "Failed",
+  limited: "Usage limited",
   ready: "Ready",
 };
 
@@ -1095,7 +1102,10 @@ export function groupSidebarThreads<
     return [{ key: "all", label: "All sessions", threads: input.threads }];
   }
 
-  const groups = new Map<string, { label: string; threads: TThread[] }>();
+  const groups = new Map<
+    string,
+    { label: string; threads: TThread[]; worktreeBranches: Set<string> }
+  >();
   for (const thread of input.threads) {
     const project = input.getProject(thread);
     const projectKey = `${thread.environmentId}\u0000${thread.projectId}`;
@@ -1113,28 +1123,47 @@ export function groupSidebarThreads<
             label: worktreePath
               ? workspaceLabel
               : `Current checkout · ${project?.title ?? workspaceLabel}`,
+            worktreeBranch: worktreePath ? displayWorktreeBranch(thread.branch) : null,
           };
         }
         case "project":
-          return { key: `project:${projectKey}`, label: project?.title ?? "Unknown project" };
+          return {
+            key: `project:${projectKey}`,
+            label: project?.title ?? "Unknown project",
+            worktreeBranch: null,
+          };
         case "branch":
           return {
             key: `branch:${projectKey}\u0000${thread.branch ?? "none"}`,
             label: thread.branch ?? "No branch",
+            worktreeBranch: null,
           };
         case "status":
-          return { key: `status:${status}`, label: SIDEBAR_THREAD_STATUS_GROUP_LABELS[status] };
+          return {
+            key: `status:${status}`,
+            label: SIDEBAR_THREAD_STATUS_GROUP_LABELS[status],
+            worktreeBranch: null,
+          };
       }
     })();
     const existing = groups.get(group.key);
     if (existing) {
       existing.threads.push(thread);
+      if (group.worktreeBranch) existing.worktreeBranches.add(group.worktreeBranch);
     } else {
-      groups.set(group.key, { label: group.label, threads: [thread] });
+      groups.set(group.key, {
+        label: group.label,
+        threads: [thread],
+        worktreeBranches: new Set(group.worktreeBranch ? [group.worktreeBranch] : []),
+      });
     }
   }
 
-  const result = [...groups.entries()].map(([key, group]) => ({ key, ...group }));
+  const result = [...groups.entries()].map(([key, group]) => ({
+    key,
+    label: group.worktreeBranches.size === 1 ? [...group.worktreeBranches][0]! : group.label,
+    threads: group.threads,
+  }));
   return input.groupOrder === "name"
     ? result.toSorted((left, right) => left.label.localeCompare(right.label))
     : result;

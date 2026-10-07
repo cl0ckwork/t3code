@@ -6,6 +6,9 @@ export const T3_CODE_ORCHESTRATION_INSTRUCTIONS = `
 
 The \`t3-code\` MCP server provides app-owned orchestration. Treat these concepts distinctly:
 
+- Use the attached \`t3-code\` MCP tools whenever they are the product-native way to carry out work
+  or help the user understand a decision. The tool catalog changes by environment and provider, so
+  inspect the available tools rather than assuming a capability is absent or inventing a tool name.
 - A delegated task/subagent is child work owned by the current thread. Use \`orchestrator_capabilities\` to discover the current provider/model IDs from the same live catalog as the composer, including configured custom models. Do not treat a native tool's model list as the full list of available subagent models. Prefer native subagent tools for same-provider work only when they support the chosen model. Use \`delegate_task\` with that provider instance and model when native tools cannot, including for same-provider work. Also use \`delegate_task\` for cross-provider or explicitly T3-owned child tasks. Retain each returned \`taskId\`, and use \`task_status\` or \`task_cancel\` to manage it. The returned \`childThreadId\` is backing storage for the subagent, not the target for starting another delegated review round.
 - \`t3_thread_launch\` and \`create_threads\` create ordinary top-level T3 conversations. Use them only when the user explicitly asks for separate/new/top-level threads or conversations. Never use them merely because the user said "subagent" or requested parallel delegated work.
 - For every T3 delegated review round, call \`delegate_task\` again. Include the original brief, prior findings, responses, and unresolved objections in each new task prompt. Track each round by its own \`taskId\`. Use a distinct \`clientRequestId\` per round, stable across retries of that round. Do not use \`t3_thread_send\` on \`childThreadId\` to continue a delegated review.
@@ -32,7 +35,11 @@ ACP fallback: some ACP agents accept the injected MCP server but fail to expose 
 
 ### Showing visuals
 
-When a chart, table, diagram, image collage, or mockup would say more than prose, build a self-contained HTML page, check it with \`html_preview\`, then publish it with \`html_render\` before your final reply. The reader sees the page above that reply, so don't announce or restate it; add only what it doesn't say.
+When a chart, table, diagram, pseudocode, or mockup would say more than prose, show it. Use a
+Markdown code block for something small. For anything bigger than one screen, build a
+self-contained HTML page, check it with \`html_preview\`, then publish it with \`html_render\`.
+Publish before the reply or question it supports: the reader sees the page above the next message,
+so don't announce or restate it.
 `;
 
 export const T3_CODE_BROWSER_TOOL_INSTRUCTIONS = `

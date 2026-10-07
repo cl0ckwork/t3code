@@ -201,6 +201,10 @@ export function codexProviderTurnTokenUsage(
 ) {
   return {
     usedTokens: Math.max(0, tokenUsage.last.totalTokens),
+    // Codex reports token accounting for the most recent response. It does
+    // not expose the native transcript after automatic compaction, so this
+    // value is an estimate, not live context occupancy.
+    contextUsageAvailable: false,
     maxTokens: tokenUsage.modelContextWindow ?? null,
     inputTokens: Math.max(0, tokenUsage.last.inputTokens),
     cachedInputTokens: Math.max(0, tokenUsage.last.cachedInputTokens),

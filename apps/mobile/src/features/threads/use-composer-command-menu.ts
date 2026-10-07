@@ -173,6 +173,7 @@ export function useComposerCommandMenu({
   threadShells = EMPTY_THREAD_SHELLS,
   currentThreadId = null,
   projectCwd,
+  workspaceProjectId,
   pullRequestProjectId = null,
   pullRequestRepository = null,
   selectedProviderStatus,
@@ -192,6 +193,8 @@ export function useComposerCommandMenu({
   /** Left out of `@` thread suggestions: a thread is never context for itself. */
   readonly currentThreadId?: ThreadId | null;
   readonly projectCwd: string | null;
+  /** Server-owned project identity for workspace skill discovery. */
+  readonly workspaceProjectId: ProjectId | null;
   readonly pullRequestProjectId?: ProjectId | null;
   readonly pullRequestRepository?: string | null;
   readonly selectedProviderStatus: ServerProvider | null;
@@ -287,7 +290,7 @@ export function useComposerCommandMenu({
     hadWorkspaceSnapshotRef.current = hasWorkspaceSnapshot;
   }, [hasWorkspaceSnapshot]);
   useEffect(() => {
-    if (!environmentId || !projectCwd || !selectedProviderInstanceId) return;
+    if (!environmentId || !projectCwd || !workspaceProjectId || !selectedProviderInstanceId) return;
     const key = `${environmentId}:${selectedProviderInstanceId}:${projectCwd}`;
     if (workspaceRefreshKeyRef.current === key) return;
     if (hasWorkspaceSnapshot) {
@@ -308,7 +311,11 @@ export function useComposerCommandMenu({
     };
     void refreshProviders({
       environmentId,
-      input: { instanceId: selectedProviderInstanceId, cwd: projectCwd },
+      input: {
+        instanceId: selectedProviderInstanceId,
+        projectId: workspaceProjectId,
+        ...(currentThreadId === null ? {} : { threadId: currentThreadId }),
+      },
     }).then((result) => {
       const refreshed =
         result._tag === "Success" &&
@@ -327,6 +334,8 @@ export function useComposerCommandMenu({
     environmentId,
     hasWorkspaceSnapshot,
     projectCwd,
+    workspaceProjectId,
+    currentThreadId,
     refreshProviders,
     selectedProviderInstanceId,
     workspaceRefreshRetry,

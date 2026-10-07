@@ -5417,6 +5417,7 @@ export default function Sidebar() {
                             scopedProjectKeys={scopedProjectKeys}
                             routeDraftId={routeDraftIdForRows}
                             onNavigateToDraft={navigateToDraft}
+                            onDraftContextMenu={handleDraftContextMenu}
                           />,
                         ];
                         const appendGroups = (

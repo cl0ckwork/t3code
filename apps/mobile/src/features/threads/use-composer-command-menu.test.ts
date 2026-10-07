@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   EnvironmentId,
+  ProjectId,
   ProviderDriverKind,
   ProviderInstanceId,
   type ServerProvider,
@@ -146,6 +147,7 @@ describe("workspace command discovery retry", () => {
       ownerKey: null,
       environmentId,
       projectCwd: cwd,
+      workspaceProjectId: ProjectId.make("project-1"),
       selectedProviderStatus: status,
       hasThread: false,
       hasCompactableConversation: false,
@@ -198,7 +200,7 @@ describe("workspace command discovery retry", () => {
     expect(refreshProviders).toHaveBeenCalledTimes(2);
     expect(refreshProviders).toHaveBeenLastCalledWith({
       environmentId,
-      input: { instanceId, cwd: "/project-a" },
+      input: { instanceId, projectId: ProjectId.make("project-1") },
     });
     await act(() => vi.advanceTimersByTimeAsync(20_000));
     expect(refreshProviders).toHaveBeenCalledTimes(2);
@@ -305,7 +307,7 @@ describe("workspace command discovery retry", () => {
     expect(refreshProviders).toHaveBeenCalledTimes(2);
     expect(refreshProviders).toHaveBeenLastCalledWith({
       environmentId,
-      input: { instanceId, cwd: "/project-b" },
+      input: { instanceId, projectId: ProjectId.make("project-1") },
     });
     expect(vi.getTimerCount()).toBe(0);
   });

@@ -969,6 +969,8 @@ export type OrchestrationV2ContextHandoff = typeof OrchestrationV2ContextHandoff
 /** Live context usage reported by the provider mid-turn (#8144). */
 export const OrchestrationV2ProviderTurnTokenUsage = Schema.Struct({
   usedTokens: NonNegativeInt,
+  /** False when the provider only reports accounting for the latest response. */
+  contextUsageAvailable: Schema.optional(Schema.Boolean),
   maxTokens: Schema.optional(Schema.NullOr(NonNegativeInt)),
   inputTokens: Schema.optional(NonNegativeInt),
   cachedInputTokens: Schema.optional(NonNegativeInt),

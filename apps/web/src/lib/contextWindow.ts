@@ -17,6 +17,8 @@ type NullableContextWindowUsage = {
 };
 
 export type ContextWindowSnapshot = NullableContextWindowUsage & {
+  /** Whether the provider measured live native-context occupancy. */
+  readonly contextUsageAvailable: boolean;
   readonly remainingTokens: number | null;
   readonly usedPercentage: number | null;
   readonly remainingPercentage: number | null;
@@ -33,14 +35,20 @@ export function deriveLatestContextWindowSnapshot(
 ): ContextWindowSnapshot | null {
   if (liveUsage != null) {
     const usedTokens = Math.max(0, liveUsage.usedTokens);
+    const contextUsageAvailable = liveUsage.contextUsageAvailable !== false;
     const maxTokens = liveUsage.maxTokens ?? null;
     const usedPercentage =
-      maxTokens !== null && maxTokens > 0 ? Math.min(100, (usedTokens / maxTokens) * 100) : null;
+      contextUsageAvailable && maxTokens !== null && maxTokens > 0
+        ? Math.min(100, (usedTokens / maxTokens) * 100)
+        : null;
     const remainingTokens =
-      maxTokens !== null ? Math.max(0, Math.round(maxTokens - usedTokens)) : null;
+      contextUsageAvailable && maxTokens !== null
+        ? Math.max(0, Math.round(maxTokens - usedTokens))
+        : null;
     const remainingPercentage = usedPercentage !== null ? Math.max(0, 100 - usedPercentage) : null;
     return {
       usedTokens,
+      contextUsageAvailable,
       totalProcessedTokens: null,
       maxTokens,
       remainingTokens,
@@ -50,7 +58,7 @@ export function deriveLatestContextWindowSnapshot(
       cachedInputTokens: liveUsage.cachedInputTokens ?? null,
       outputTokens: liveUsage.outputTokens ?? null,
       reasoningOutputTokens: liveUsage.reasoningOutputTokens ?? null,
-      lastUsedTokens: null,
+      lastUsedTokens: contextUsageAvailable ? null : usedTokens,
       lastInputTokens: null,
       lastCachedInputTokens: null,
       lastOutputTokens: null,
@@ -70,15 +78,22 @@ export function deriveLatestContextWindowSnapshot(
     providerUsage !== undefined &&
     providerUsageUpdatedAt !== undefined
   ) {
+    const contextUsageAvailable = providerUsage.contextUsageAvailable !== false;
     const maxTokens = asFiniteNumber(providerUsage.maxTokens);
     const usedTokens = providerUsage.usedTokens;
     const usedPercentage =
-      maxTokens !== null && maxTokens > 0 ? Math.min(100, (usedTokens / maxTokens) * 100) : null;
+      contextUsageAvailable && maxTokens !== null && maxTokens > 0
+        ? Math.min(100, (usedTokens / maxTokens) * 100)
+        : null;
     return {
       usedTokens,
+      contextUsageAvailable,
       totalProcessedTokens: asFiniteNumber(providerUsage.totalProcessedTokens),
       maxTokens,
-      remainingTokens: maxTokens === null ? null : Math.max(0, Math.round(maxTokens - usedTokens)),
+      remainingTokens:
+        !contextUsageAvailable || maxTokens === null
+          ? null
+          : Math.max(0, Math.round(maxTokens - usedTokens)),
       usedPercentage,
       remainingPercentage: usedPercentage === null ? null : Math.max(0, 100 - usedPercentage),
       inputTokens: asFiniteNumber(providerUsage.inputTokens),
@@ -118,6 +133,7 @@ export function deriveLatestContextWindowSnapshot(
 
     return {
       usedTokens,
+      contextUsageAvailable: true,
       totalProcessedTokens: asFiniteNumber(payload.beforeTokenCount),
       maxTokens,
       remainingTokens,

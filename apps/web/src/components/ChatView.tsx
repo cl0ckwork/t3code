@@ -7489,6 +7489,7 @@ export default function ChatView(props: ChatViewProps) {
     if (
       !activeThread ||
       !activeContextWindow ||
+      !activeContextWindow.contextUsageAvailable ||
       resumeCompactionKey === null ||
       dismissedResumeCompactionKeys.has(resumeCompactionKey) ||
       resumeCompactionPermanentlyDismissed ||
@@ -11382,6 +11383,7 @@ export default function ChatView(props: ChatViewProps) {
                               keybindings={keybindings}
                               terminalOpen={Boolean(terminalUiState.terminalOpen)}
                               gitCwd={gitCwd}
+                              workspaceProjectId={activeProject?.id ?? null}
                               pullRequestProjectId={
                                 supportsPullRequests ? (activeProject?.id ?? null) : null
                               }

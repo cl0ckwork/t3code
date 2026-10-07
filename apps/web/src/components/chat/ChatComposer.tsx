@@ -1596,6 +1596,7 @@ export interface ChatComposerProps {
   keybindings: ResolvedKeybindingsConfig;
   terminalOpen: boolean;
   gitCwd: string | null;
+  workspaceProjectId: ProjectId | null;
   pullRequestProjectId: ProjectId | null;
   pullRequestRepository: string | null;
   restingControlsHost: HTMLDivElement | null;
@@ -1740,6 +1741,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     keybindings,
     terminalOpen,
     gitCwd,
+    workspaceProjectId,
     pullRequestProjectId,
     pullRequestRepository,
     restingControlsHost,
@@ -2227,7 +2229,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     hadWorkspaceSnapshotRef.current = hasWorkspaceSnapshot;
   }, [gitCwd, selectedProviderStatus]);
   useEffect(() => {
-    if (!gitCwd || !selectedProviderEntry) return;
+    if (!gitCwd || !workspaceProjectId || !selectedProviderEntry) return;
     const key = `${environmentId}:${selectedProviderEntry.instanceId}:${gitCwd}`;
     const hasWorkspaceSnapshot = hasCompleteProviderWorkspaceSnapshot(
       selectedProviderStatus,
@@ -2252,7 +2254,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     };
     void refreshProviders({
       environmentId,
-      input: { instanceId: selectedProviderEntry.instanceId, cwd: gitCwd },
+      input: {
+        instanceId: selectedProviderEntry.instanceId,
+        projectId: workspaceProjectId,
+        ...(activeThreadId === null ? {} : { threadId: activeThreadId }),
+      },
     }).then((result) => {
       const hasWorkspaceSnapshot =
         result._tag === "Success" &&
@@ -2269,6 +2275,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   }, [
     environmentId,
     gitCwd,
+    workspaceProjectId,
+    activeThreadId,
     prompt,
     refreshProviders,
     selectedProviderEntry,
@@ -2353,7 +2361,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     [activeThreadModelSelection, modelOptionsByInstance],
   );
   const reserveContextWindowMeter = shouldReserveContextWindowMeter({
-    meterEnabled: settings.contextWindowMeterEnabled,
+    meterEnabled: settings.usageMeterEnabled,
     detailLoading: props.threadSyncPhase === "loading",
     threadStarted: threadShellHasStarted(props.activeThreadShell),
     providerReportsContextWindow: selectedProviderStatus
@@ -7284,7 +7292,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   "relative",
                   isComposerResting && "flex min-w-0 items-center gap-1",
                   isComposerResting &&
-                    ((settings.contextWindowMeterEnabled && activeContextWindow) ||
+                    ((settings.usageMeterEnabled && activeContextWindow) ||
                     reserveContextWindowMeter
                       ? "pr-28"
                       : showComposerAttachAction
@@ -7514,9 +7522,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   ) : null}
                   <ComposerFooterPrimaryActions
                     compact={isComposerResting || isComposerPrimaryActionsCompact}
-                    activeContextWindow={
-                      settings.contextWindowMeterEnabled ? activeContextWindow : null
-                    }
+                    activeContextWindow={settings.usageMeterEnabled ? activeContextWindow : null}
                     reserveContextWindowMeter={reserveContextWindowMeter}
                     activeThreadModelDisplayName={activeThreadModelDisplayName}
                     pendingAction={pendingPrimaryAction}

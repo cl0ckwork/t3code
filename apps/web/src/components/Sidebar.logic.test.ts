@@ -134,8 +134,39 @@ describe("groupSidebarThreads", () => {
   it("keeps every thread in one workspace group", () => {
     expect(group("workspace")).toEqual([
       expect.objectContaining({ label: "Current checkout · Pogo" }),
-      expect.objectContaining({ label: "feature-a" }),
+      expect.objectContaining({ label: "zeta" }),
     ]);
+  });
+
+  it("falls back to the directory when thread branch metadata conflicts", () => {
+    const result = groupSidebarThreads({
+      grouping: "workspace" as const,
+      groupOrder: "recent_activity" as const,
+      threads: [
+        thread({ worktreePath: "/code/pogo/.t3/worktrees/t3-deadbeef", branch: "feature/a" }),
+        thread({ worktreePath: "/code/pogo/.t3/worktrees/t3-deadbeef", branch: "feature/b" }),
+      ],
+      getProject: () => project,
+      getWorkspaceLabel: (path) => path.split("/").at(-1) ?? path,
+      getStatus: () => "ready" as const,
+    });
+
+    expect(result).toEqual([expect.objectContaining({ label: "t3-deadbeef" })]);
+  });
+
+  it("keeps the directory fallback while a worktree branch is temporary", () => {
+    const result = groupSidebarThreads({
+      grouping: "workspace" as const,
+      groupOrder: "recent_activity" as const,
+      threads: [
+        thread({ worktreePath: "/code/pogo/.t3/worktrees/t3-deadbeef", branch: "t3/deadbeef" }),
+      ],
+      getProject: () => project,
+      getWorkspaceLabel: (path) => path.split("/").at(-1) ?? path,
+      getStatus: () => "ready" as const,
+    });
+
+    expect(result).toEqual([expect.objectContaining({ label: "t3-deadbeef" })]);
   });
 
   it("supports project, branch, and runtime-status dimensions", () => {

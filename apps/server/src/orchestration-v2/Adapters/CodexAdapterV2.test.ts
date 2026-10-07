@@ -163,7 +163,7 @@ describe("CodexAdapterV2 file change approvals", () => {
 });
 
 describe("CodexAdapterV2 context usage", () => {
-  it("uses the current context rather than cumulative processed tokens", () => {
+  it("keeps last-response accounting separate from live context", () => {
     const usage = CodexAdapterV2.codexProviderTurnTokenUsage(
       {
         total: {
@@ -187,6 +187,7 @@ describe("CodexAdapterV2 context usage", () => {
 
     assert.deepEqual(usage, {
       usedTokens: 50_000,
+      contextUsageAvailable: false,
       maxTokens: 200_000,
       inputTokens: 45_000,
       cachedInputTokens: 10_000,

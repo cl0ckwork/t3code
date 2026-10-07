@@ -80,4 +80,21 @@ describe("live provider-turn usage (#8144)", () => {
     expect(snapshot?.maxTokens).toBeNull();
     expect(snapshot?.usedPercentage).toBeNull();
   });
+
+  it("does not present last-response accounting as live context", () => {
+    const snapshot = deriveLatestContextWindowSnapshot([], {
+      usedTokens: 42_000,
+      contextUsageAvailable: false,
+      maxTokens: 200_000,
+      updatedAt: "2026-08-27T00:00:00.000Z",
+    });
+    expect(snapshot).toMatchObject({
+      contextUsageAvailable: false,
+      usedTokens: 42_000,
+      lastUsedTokens: 42_000,
+      maxTokens: 200_000,
+      usedPercentage: null,
+      remainingTokens: null,
+    });
+  });
 });

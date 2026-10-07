@@ -497,6 +497,7 @@ export function ReviewSheet(props: ReviewSheetProps) {
     isPending: areFilePatchesPending,
   } = useReviewDiffData({
     threadKey: reviewCache.threadKey,
+    threadId,
     environmentId,
     cwd: selectedThreadCwd,
     selectedSection,

@@ -165,6 +165,7 @@ import {
   observeRpcStreamEffect,
 } from "./observability/RpcInstrumentation.ts";
 import * as ProviderRegistry from "./provider/ProviderRegistry.ts";
+import { resolveProviderWorkspace } from "./provider/ProviderWorkspaceResolver.ts";
 import * as ProviderInstanceRegistry from "./provider/ProviderInstanceRegistry.ts";
 import * as AcpRegistrySupport from "./provider/acp/AcpRegistrySupport.ts";
 import * as AcpRegistryRuntimeCoordinator from "./provider/acp/AcpRegistryRuntimeCoordinator.ts";
@@ -2306,10 +2307,14 @@ const layerWsRpc = (
               if (input.instanceId === undefined) {
                 yield* usageLimitSources.refresh;
               }
-              let providers = yield* input.cwd !== undefined && input.instanceId !== undefined
+              let providers = yield* input.projectId !== undefined && input.instanceId !== undefined
                 ? providerRegistry.refreshWorkspaceSnapshot({
                     instanceId: input.instanceId,
-                    cwd: input.cwd,
+                    cwd: yield* resolveProviderWorkspace({
+                      instanceId: input.instanceId,
+                      projectId: input.projectId,
+                      ...(input.threadId === undefined ? {} : { threadId: input.threadId }),
+                    }),
                     fresh: input.fresh === true,
                   })
                 : input.instanceId !== undefined

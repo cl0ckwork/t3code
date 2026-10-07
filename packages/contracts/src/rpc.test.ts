@@ -3,7 +3,7 @@ import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 
 import { ORCHESTRATION_V2_WS_METHODS } from "./orchestrationV2.ts";
-import { WsRpcGroup, WsSubscribeServerConfigRpc } from "./rpc.ts";
+import { WS_METHODS, WsRpcGroup, WsSubscribeServerConfigRpc } from "./rpc.ts";
 
 /**
  * The client always sends `environmentThemes`, including to servers built
@@ -32,6 +32,24 @@ describe("subscribeServerConfig payload compatibility", () => {
 });
 
 describe("WebSocket RPC contracts", () => {
+  it("does not carry a client filesystem path into provider workspace refreshes", () => {
+    const refresh = WsRpcGroup.requests.get(WS_METHODS.serverRefreshProviders);
+    if (refresh === undefined) throw new Error("server.refreshProviders is not registered");
+
+    const decoded = Schema.decodeSync(refresh.payloadSchema)({
+      instanceId: "codex",
+      projectId: "project-1",
+      threadId: "thread-1",
+      cwd: "/forged/path",
+    });
+
+    expect(decoded).toEqual({
+      instanceId: "codex",
+      projectId: "project-1",
+      threadId: "thread-1",
+    });
+  });
+
   it("exposes only the V2 orchestration transport surface", () => {
     const methods = [...WsRpcGroup.requests.keys()];
 

@@ -521,16 +521,16 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/general",
   },
   {
+    id: "context-thread-usage-indicator",
+    title: "Context and thread usage",
+    to: "/settings/general",
+    searchTerms: ["composer meter token context window codex claude compaction"],
+  },
+  {
     id: "legacy-plan-mode",
     title: "Plan mode (legacy)",
     to: "/settings/general",
     searchTerms: ["build plan composer old"],
-  },
-  {
-    id: "legacy-context-window-indicator",
-    title: "Context window indicator (legacy)",
-    to: "/settings/general",
-    searchTerms: ["composer meter usage tokens circle old"],
   },
   {
     id: "legacy-sidebar",

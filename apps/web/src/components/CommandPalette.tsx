@@ -1992,7 +1992,8 @@ function OpenCommandPaletteDialog(props: {
           environmentId,
           input: {
             instanceId: thread.runtime?.providerInstanceId ?? thread.modelSelection.instanceId,
-            cwd: thread.worktreePath ?? project.workspaceRoot,
+            projectId: project.id,
+            threadId: thread.id,
             fresh: true,
           },
         });

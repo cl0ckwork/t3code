@@ -1159,7 +1159,8 @@ export function createServerEnvironmentAtoms<R, E>(
           JSON.stringify([
             environmentId,
             input.instanceId ?? null,
-            input.cwd ?? null,
+            input.projectId ?? null,
+            input.threadId ?? null,
             input.fresh ?? false,
             input.refreshModels ?? false,
           ]),

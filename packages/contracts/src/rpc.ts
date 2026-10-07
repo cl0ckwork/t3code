@@ -25,7 +25,7 @@ import * as Schema from "effect/Schema";
 import * as Rpc from "effect/rpc/Rpc";
 import * as RpcGroup from "effect/rpc/RpcGroup";
 import * as RpcMiddleware from "effect/rpc/RpcMiddleware";
-import { NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { NonNegativeInt, ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import {
   CodexAuthCallbackInput,
   CodexAuthCallbackState,
@@ -599,7 +599,15 @@ const WsServerGetConfigRpc = Rpc.make(WS_METHODS.serverGetConfig, {
 const WsServerRefreshProvidersRpc = Rpc.make(WS_METHODS.serverRefreshProviders, {
   payload: Schema.Struct({
     instanceId: Schema.optional(ProviderInstanceId),
-    cwd: Schema.optional(TrimmedNonEmptyString),
+    /**
+     * Server-owned workspace identity for a scoped skills/commands scan. The
+     * server resolves its path from persisted project and thread state; a
+     * client never supplies a filesystem path.
+     */
+    projectId: Schema.optional(ProjectId),
+    threadId: Schema.optional(ThreadId),
+    /** With `instanceId` and `projectId`: rescan the workspace's skills and
+     * slash commands even when a snapshot for that workspace already exists. */
     fresh: Schema.optional(Schema.Boolean),
     /** Explicit user request: bypass T3-owned caches and rediscover models.
      * Background status refreshes must not open agent sessions. */

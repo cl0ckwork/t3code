@@ -695,7 +695,7 @@ describe("ClientSettings sidebar", () => {
 });
 
 describe("ClientSettings context window meter", () => {
-  it("defaults off and preserves an explicit legacy opt-in", () => {
+  it("keeps the legacy meter opt-in while enabling the current usage indicator", () => {
     expect(decodeClientSettings({}).contextWindowMeterEnabled).toBe(false);
     expect(
       decodeClientSettings({ contextWindowMeterEnabled: true }).contextWindowMeterEnabled,
@@ -703,6 +703,8 @@ describe("ClientSettings context window meter", () => {
     expect(
       decodeClientSettingsPatch({ contextWindowMeterEnabled: true }).contextWindowMeterEnabled,
     ).toBe(true);
+    expect(decodeClientSettings({}).usageMeterEnabled).toBe(true);
+    expect(decodeClientSettingsPatch({ usageMeterEnabled: false }).usageMeterEnabled).toBe(false);
   });
 });
 

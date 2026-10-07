@@ -163,6 +163,7 @@ import * as ThreadSearch from "./orchestration-v2/ThreadSearch.ts";
 import * as OrchestrationEventStore from "./persistence/OrchestrationEventStore.ts";
 import { userFacingDispatchErrorMessage } from "./orchestration-v2/UserFacingErrors.ts";
 import * as ProviderRegistry from "./provider/ProviderRegistry.ts";
+import { resolveProviderWorkspace } from "./provider/ProviderWorkspaceResolver.ts";
 import * as ProviderInstanceRegistry from "./provider/ProviderInstanceRegistry.ts";
 import * as AcpRegistrySupport from "@t3tools/provider-acp-registry/server/AcpRegistrySupport";
 import * as AcpRegistryRuntimeCoordinator from "@t3tools/provider-acp-registry/server/AcpRegistryRuntimeCoordinator";
@@ -2188,10 +2189,14 @@ const layerWsRpc = (
             if (input.instanceId === undefined) {
               yield* usageLimitSources.refresh;
             }
-            let providers = yield* input.cwd !== undefined && input.instanceId !== undefined
+            let providers = yield* input.projectId !== undefined && input.instanceId !== undefined
               ? providerRegistry.refreshWorkspaceSnapshot({
                   instanceId: input.instanceId,
-                  cwd: input.cwd,
+                  cwd: yield* resolveProviderWorkspace({
+                    instanceId: input.instanceId,
+                    projectId: input.projectId,
+                    ...(input.threadId === undefined ? {} : { threadId: input.threadId }),
+                  }),
                   fresh: input.fresh === true,
                 })
               : input.instanceId !== undefined

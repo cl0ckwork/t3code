@@ -478,6 +478,7 @@ export function NewTaskDraftScreen(props: {
       : null,
     pullRequestRepository: selectedProject?.repositoryIdentity?.displayName ?? null,
     projectCwd: composerWorkspaceCwd,
+    workspaceProjectId: selectedProject?.id ?? null,
     selectedProviderStatus: flow.selectedProviderStatus,
     hasThread: false,
     hasCompactableConversation: false,

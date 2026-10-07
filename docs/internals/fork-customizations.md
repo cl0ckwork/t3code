@@ -59,22 +59,16 @@ project checkout or thread worktree. The fork makes those scopes explicit.
 ### Implementation boundary
 
 Provider snapshots and their workspace variants are owned by the provider registry. The composer
-asks for a snapshot for its current Git cwd and renders skills from that result; see
-[`ChatComposer.tsx`](../../apps/web/src/components/chat/ChatComposer.tsx) and the shared
-`providerSkills` helpers in `packages/client-runtime`.
+identifies the provider instance plus its persisted project and optional thread; the refresh RPC in
+[`ws.ts`](../../apps/server/src/ws.ts) resolves `thread.worktreePath ?? project.workspaceRoot`
+before it calls the registry. `cwd` is deliberately not part of the RPC contract. The registry
+then caches the provider-specific result by instance and resolved workspace path, while the
+composer renders the matching workspace snapshot through the shared `providerSkills` helpers.
 
-The final Codex validation boundary is
-[`ProviderSkillLookup.ts`](../../apps/server/src/provider/ProviderSkillLookup.ts). It receives
-only provider instance, project id, thread id, and skill names; it loads the project and thread,
-derives the cwd on the server, applies a deadline, and calls the provider's `snapshotForCwd`.
-[`ProviderCommandReactor.ts`](../../apps/server/src/orchestration/Layers/ProviderCommandReactor.ts)
-uses that lookup just before it creates a Codex turn. Keep this server-side re-resolution: picker
-data is inherently stale by send time.
-
-Codex's global probe filters repository skills in
-[`CodexProvider.ts`](../../apps/server/src/provider/Layers/CodexProvider.ts). This prevents a
-launch-cwd skill from becoming a global picker entry. Claude performs provider-native filesystem
-discovery through the same workspace snapshot route.
+This is a trust boundary, not a client-side convenience. A thread must belong to the supplied
+project, a deleted project or thread fails the refresh, and a forged path cannot cause the server
+to scan another directory. Provider adapters remain responsible for native structured skill input
+at dispatch time; visible `$skill` text alone is never an attachment contract.
 
 Tests to preserve include forged paths, root/worktree selection, collisions, deletion, timeouts,
 and the Codex cwd/structured-skill attachment. Test the picker trigger/chip behavior separately.
@@ -98,6 +92,26 @@ components.
 
 Preserve both trigger forms as a UI affordance. Provider-native slash commands remain distinct
 from skills; do not consume or rewrite a real provider command because its name resembles a skill.
+
+## Context and thread usage
+
+The composer meter is on by default through `usageMeterEnabled`. It distinguishes live native
+context occupancy from accounting that merely describes the most recent provider response. This is
+essential for Codex: its app server reports the latest request's token total and model window, but
+not the transcript size after automatic compaction.
+
+[`CodexAdapterV2.ts`](../../apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts) marks
+that report with `contextUsageAvailable: false`. The contract in
+[`providerRuntime.ts`](../../packages/contracts/src/providerRuntime.ts) carries the distinction to
+the web client. [`ContextWindowMeter.tsx`](../../apps/web/src/components/chat/ContextWindowMeter.tsx)
+then shows **Last request context** rather than a fake percentage, remaining-token count, or
+automatic compact recommendation. Actual live reports from providers that support them retain the
+normal context-window progress UI.
+
+Never use an estimate as capacity data. [`ContextHandoffBudget.ts`](../../apps/server/src/orchestration-v2/ContextHandoffBudget.ts)
+excludes estimate-only reports from history handoff and model-switch calculations, and the resume
+compact banner appears only for live context telemetry. The useful invariant is: no UI or
+orchestration decision may imply that a last-response token count is the current native context.
 
 ## Thread titles
 
@@ -125,6 +139,12 @@ drag-and-drop retain a clear owner.
 The derivation is in [`Sidebar.logic.ts`](../../apps/web/src/components/Sidebar.logic.ts), with
 settings types in [`settings.ts`](../../packages/contracts/src/settings.ts). The UI is in
 [`Sidebar.tsx`](../../apps/web/src/components/Sidebar.tsx).
+
+Workspace grouping is keyed by the persisted full worktree path, never its display label. Its label
+prefers one unambiguous, non-temporary branch reported by the threads in that workspace, falling
+back to the directory basename while branch creation is still pending or thread metadata conflicts.
+Do not rename a live worktree merely to improve this label: Git, persisted thread state, and a
+running provider may all hold its path.
 
 Two lifecycle lists are intentional:
 

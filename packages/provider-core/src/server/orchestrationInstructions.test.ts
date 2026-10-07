@@ -26,6 +26,15 @@ describe("T3 orchestration provider instructions", () => {
     assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "bindToCurrentThread=false");
   });
 
+  it("directs agents to use the attached T3 tools and show useful visuals", () => {
+    assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "inspect the available tools");
+    assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "pseudocode");
+    assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "Markdown code block");
+    assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "html_preview");
+    assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "html_render");
+    assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "Publish before the reply or question");
+  });
+
   it("injects prompt fallback only for an MCP-enabled first run", () => {
     const prompt = "Inspect the repository.";
     const injected = t3OrchestrationPromptForFirstRun({

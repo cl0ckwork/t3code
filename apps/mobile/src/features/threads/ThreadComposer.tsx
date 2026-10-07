@@ -446,6 +446,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     threadShells: useThreadShells(),
     currentThreadId: props.selectedThread.id,
     projectCwd: props.projectCwd,
+    workspaceProjectId: project?.id ?? null,
     pullRequestProjectId: props.serverConfig?.environment.capabilities.pullRequests
       ? (project?.id ?? null)
       : null,

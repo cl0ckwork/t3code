@@ -1580,6 +1580,7 @@ export interface ChatComposerProps {
   keybindings: ResolvedKeybindingsConfig;
   terminalOpen: boolean;
   gitCwd: string | null;
+  workspaceProjectId: ProjectId | null;
   pullRequestProjectId: ProjectId | null;
   pullRequestRepository: string | null;
   threadPullRequests: ReadonlyArray<ThreadPullRequestLink> | undefined;
@@ -1658,10 +1659,19 @@ export interface ChatComposerProps {
 function useProviderWorkspaceSnapshotRefresh(input: {
   readonly environmentId: EnvironmentId;
   readonly gitCwd: string | null;
+  readonly workspaceProjectId: ProjectId | null;
+  readonly activeThreadId: ThreadId | null;
   readonly selectedProviderEntry: ProviderInstanceEntry | undefined;
   readonly selectedProviderStatus: ServerProvider | null;
 }) {
-  const { environmentId, gitCwd, selectedProviderEntry, selectedProviderStatus } = input;
+  const {
+    activeThreadId,
+    environmentId,
+    gitCwd,
+    selectedProviderEntry,
+    selectedProviderStatus,
+    workspaceProjectId,
+  } = input;
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
   });
@@ -1718,7 +1728,7 @@ function useProviderWorkspaceSnapshotRefresh(input: {
       lastWorkspaceSnapshotLossRef.current = snapshotLossCount;
       workspaceRefreshKeyRef.current = null;
     }
-    if (key === null || !gitCwd || !selectedProviderEntry) return;
+    if (key === null || !gitCwd || !workspaceProjectId || !selectedProviderEntry) return;
     const lastRequest = workspaceRefreshKeyRef.current;
     if (
       lastRequest?.key === key &&
@@ -1740,7 +1750,11 @@ function useProviderWorkspaceSnapshotRefresh(input: {
     };
     void refreshProviders({
       environmentId,
-      input: { instanceId: selectedProviderEntry.instanceId, cwd: gitCwd },
+      input: {
+        instanceId: selectedProviderEntry.instanceId,
+        projectId: workspaceProjectId,
+        ...(activeThreadId === null ? {} : { threadId: activeThreadId }),
+      },
     }).then((result) => {
       const refreshedSnapshot =
         result._tag === "Success" &&
@@ -1947,6 +1961,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     keybindings,
     terminalOpen,
     gitCwd,
+    workspaceProjectId,
     pullRequestProjectId,
     pullRequestRepository,
     threadPullRequests,
@@ -2338,6 +2353,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const refreshWorkspaceSnapshotOnTyping = useProviderWorkspaceSnapshotRefresh({
     environmentId,
     gitCwd,
+    workspaceProjectId,
+    activeThreadId,
     selectedProviderEntry,
     selectedProviderStatus: selectedProviderStatus,
   });

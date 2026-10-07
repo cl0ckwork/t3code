@@ -5308,6 +5308,7 @@ export default function ChatView(props: ChatViewProps) {
     : null;
   const resumeCompactionTokens =
     activeContextWindow &&
+    activeContextWindow.contextUsageAvailable &&
     !resumeCompactionPermanentlyDismissed &&
     !nativeResumeCompactionDismissed &&
     !compactDisabled &&
@@ -8274,6 +8275,7 @@ export default function ChatView(props: ChatViewProps) {
                               keybindings={keybindings}
                               terminalOpen={Boolean(terminalUiState.terminalOpen)}
                               gitCwd={gitCwd}
+                              workspaceProjectId={activeProject?.id ?? null}
                               pullRequestProjectId={
                                 supportsPullRequests ? (activeProject?.id ?? null) : null
                               }

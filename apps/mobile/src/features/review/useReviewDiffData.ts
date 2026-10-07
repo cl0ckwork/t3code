@@ -15,6 +15,7 @@ import {
 
 import type {
   EnvironmentId,
+  ThreadId,
   ReviewDiffFileStat,
   ReviewDiffPreviewSource,
 } from "@t3tools/contracts";
@@ -123,13 +124,14 @@ export function formatHeaderDiffSummary(
 
 export function useReviewDiffData(input: {
   readonly threadKey: string | null;
+  readonly threadId: ThreadId;
   readonly environmentId: EnvironmentId | undefined;
   readonly cwd: string | null;
   readonly selectedSection: ReviewSectionItem | null;
   readonly revision: string | undefined;
   readonly draftMessage: string;
 }) {
-  const { draftMessage, selectedSection, threadKey } = input;
+  const { draftMessage, selectedSection, threadKey, threadId } = input;
   const selectedSectionId = selectedSection?.id ?? null;
   const source = selectedSection?.source;
   const lazySource = source?.truncated && source.files ? source : null;
@@ -162,7 +164,7 @@ export function useReviewDiffData(input: {
   );
   const queries = useMemo(
     () =>
-      !environmentId || !cwd || !lazySource
+      !environmentId || !lazySource
         ? []
         : (lazySource.files ?? []).map((file, index) =>
             indices.has(index)
@@ -171,7 +173,7 @@ export function useReviewDiffData(input: {
                   input: {
                     cacheKey: scope,
                     request: {
-                      cwd,
+                      threadId,
                       ...(lazySource.baseRef ? { baseRef: lazySource.baseRef } : {}),
                       file: {
                         path: file.path,
@@ -183,7 +185,7 @@ export function useReviewDiffData(input: {
                 })
               : null,
           ),
-    [environmentId, cwd, lazySource, indices, scope],
+    [environmentId, lazySource, indices, scope, threadId],
   );
   const parsedQuery = useMemo(
     () =>

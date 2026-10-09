@@ -37,6 +37,7 @@ import * as EffectCodexSchema from "effect-codex-app-server/schema";
 
 import { buildCodexInitializeParams } from "./CodexProvider.ts";
 import { codexSessionAppServerArgs } from "./codexLaunchArgs.ts";
+import { codexMcpCwdOverrides } from "./codexMcpConfig.ts";
 import { expandHomePath } from "../../pathExpansion.ts";
 import { buildCodexDeveloperInstructions } from "../CodexDeveloperInstructions.ts";
 const decodeV2TurnStartResponse = Schema.decodeUnknownEffect(EffectCodexSchema.V2TurnStartResponse);
@@ -451,7 +452,7 @@ type CodexThreadOpenResponse =
   | CodexRpc.ClientRequestResponsesByMethod["thread/start"]
   | CodexRpc.ClientRequestResponsesByMethod["thread/resume"];
 
-type CodexThreadOpenMethod = "thread/start" | "thread/resume";
+type CodexThreadOpenMethod = "config/read" | "thread/start" | "thread/resume";
 
 interface CodexThreadOpenClient {
   readonly request: <M extends CodexThreadOpenMethod>(
@@ -460,7 +461,7 @@ interface CodexThreadOpenClient {
   ) => Effect.Effect<CodexRpc.ClientRequestResponsesByMethod[M], CodexErrors.CodexAppServerError>;
 }
 
-export const openCodexThread = (input: {
+export const openCodexThread = Effect.fn("openCodexThread")(function* (input: {
   readonly client: CodexThreadOpenClient;
   readonly threadId: ThreadId;
   readonly runtimeMode: RuntimeMode;
@@ -468,23 +469,29 @@ export const openCodexThread = (input: {
   readonly requestedModel: string | undefined;
   readonly serviceTier: CodexServiceTier | undefined;
   readonly resumeThreadId: string | undefined;
-}): Effect.Effect<CodexThreadOpenResponse, CodexErrors.CodexAppServerError> => {
+}): Effect.fn.Return<CodexThreadOpenResponse, CodexErrors.CodexAppServerError> {
   const resumeThreadId = input.resumeThreadId;
+  const config = yield* input.client.request("config/read", { cwd: input.cwd });
+  const mcpServers = codexMcpCwdOverrides(config, input.cwd);
   const startParams = buildThreadStartParams({
     cwd: input.cwd,
     runtimeMode: input.runtimeMode,
     model: input.requestedModel,
     serviceTier: input.serviceTier,
   });
+  const threadParams = {
+    ...startParams,
+    ...(Object.keys(mcpServers).length > 0 ? { config: { mcp_servers: mcpServers } } : {}),
+  };
 
   if (resumeThreadId === undefined) {
-    return input.client.request("thread/start", startParams);
+    return yield* input.client.request("thread/start", threadParams);
   }
 
-  return input.client
+  return yield* input.client
     .request("thread/resume", {
       threadId: resumeThreadId,
-      ...startParams,
+      ...threadParams,
     })
     .pipe(
       Effect.catchIf(isRecoverableThreadResumeError, (error) =>
@@ -494,10 +501,10 @@ export const openCodexThread = (input: {
           resumeThreadId,
           recoverable: true,
           cause: error,
-        }).pipe(Effect.andThen(input.client.request("thread/start", startParams))),
+        }).pipe(Effect.andThen(input.client.request("thread/start", threadParams))),
       ),
     );
-};
+});
 
 function readNotificationThreadId(notification: CodexServerNotification): string | undefined {
   switch (notification.method) {

@@ -139,3 +139,11 @@ Use a totally separate `CODEX_HOME path` only when you want a separate Codex wor
 
 That means separate sessions and less account switching inside old threads. Most dual-account users
 should use the shared-home plus shadow-home setup instead.
+
+## Project MCP Servers
+
+Codex stdio MCP servers can use checkout-relative launch commands such as `./scripts/mcp`.
+When a server has no `cwd`, it runs from the thread's working directory, including its worktree.
+A relative `cwd` is resolved from the directory containing the Codex configuration that defines
+that field. For example, `cwd = ".."` in a project's `.codex/config.toml` selects the project root.
+Absolute working directories are used as configured.

@@ -1,4 +1,6 @@
+// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeAssert from "node:assert/strict";
+import * as NodePath from "node:path";
 
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -571,16 +573,115 @@ describe("isRecoverableThreadResumeError", () => {
 });
 
 describe("openCodexThread", () => {
+  it.effect("does not open a thread when its effective configuration cannot be read", () =>
+    Effect.gen(function* () {
+      const calls: Array<string> = [];
+      const failure = new CodexErrors.CodexAppServerRequestError({
+        code: -32603,
+        errorMessage: "Config file not found",
+      });
+      const client = {
+        request: <M extends "config/read" | "thread/start" | "thread/resume">(
+          method: M,
+          _payload: CodexRpc.ClientRequestParamsByMethod[M],
+        ) => {
+          calls.push(method);
+          return Effect.fail(failure);
+        },
+      };
+      const error = yield* openCodexThread({
+        client,
+        threadId: ThreadId.make("thread-1"),
+        runtimeMode: "full-access",
+        cwd: "/work/checkout",
+        requestedModel: undefined,
+        serviceTier: undefined,
+        resumeThreadId: "existing-thread",
+      }).pipe(Effect.flip);
+      NodeAssert.strictEqual(error, failure);
+      NodeAssert.deepStrictEqual(calls, ["config/read"]);
+    }),
+  );
+
+  for (const cwd of [
+    NodePath.resolve("/work/checkouts/one"),
+    NodePath.resolve("/work/worktrees/two"),
+  ]) {
+    for (const resumeThreadId of [undefined, "existing-thread"]) {
+      it.effect(
+        `applies checkout MCP cwd overrides on ${resumeThreadId ? "resume" : "start"} in ${cwd}`,
+        () =>
+          Effect.gen(function* () {
+            const calls: Array<{ method: string; payload: unknown }> = [];
+            const client = {
+              request: <M extends "config/read" | "thread/start" | "thread/resume">(
+                method: M,
+                payload: CodexRpc.ClientRequestParamsByMethod[M],
+              ) => {
+                calls.push({ method, payload });
+                const response =
+                  method === "config/read"
+                    ? {
+                        config: {
+                          mcp_servers: { checkout: { command: "./scripts/mcp", cwd: ".." } },
+                        },
+                        origins: {
+                          "mcp_servers.checkout.cwd": {
+                            name: { type: "project", dotCodexFolder: NodePath.join(cwd, ".codex") },
+                            version: "project",
+                          },
+                        },
+                      }
+                    : makeThreadOpenResponse("opened-thread");
+                return Effect.succeed(response as CodexRpc.ClientRequestResponsesByMethod[M]);
+              },
+            };
+            yield* openCodexThread({
+              client,
+              threadId: ThreadId.make("thread-1"),
+              runtimeMode: "full-access",
+              cwd,
+              requestedModel: "gpt-5.3-codex",
+              serviceTier: undefined,
+              resumeThreadId,
+            });
+            NodeAssert.deepStrictEqual(calls, [
+              { method: "config/read", payload: { cwd } },
+              {
+                method: resumeThreadId ? "thread/resume" : "thread/start",
+                payload: {
+                  ...(resumeThreadId ? { threadId: resumeThreadId } : {}),
+                  cwd,
+                  approvalPolicy: "never",
+                  sandbox: "danger-full-access",
+                  approvalsReviewer: "user",
+                  model: "gpt-5.3-codex",
+                  config: { mcp_servers: { checkout: { cwd } } },
+                },
+              },
+            ]);
+          }),
+      );
+    }
+  }
+
   it.effect("falls back to thread/start when resume fails recoverably", () =>
     Effect.gen(function* () {
-      const calls: Array<{ method: "thread/start" | "thread/resume"; payload: unknown }> = [];
+      const calls: Array<{ method: string; payload: unknown }> = [];
       const started = makeThreadOpenResponse("fresh-thread");
       const client = {
-        request: <M extends "thread/start" | "thread/resume">(
+        request: <M extends "config/read" | "thread/start" | "thread/resume">(
           method: M,
           payload: CodexRpc.ClientRequestParamsByMethod[M],
         ) => {
           calls.push({ method, payload });
+          if (method === "config/read") {
+            const config: CodexRpc.ClientRequestResponsesByMethod["config/read"] = {
+              config: { mcp_servers: { checkout: { command: "./mcp" } } },
+              origins: {},
+            };
+            return Effect.succeed(config as CodexRpc.ClientRequestResponsesByMethod[M]);
+          }
           if (method === "thread/resume") {
             return Effect.fail(
               new CodexErrors.CodexAppServerRequestError({
@@ -606,18 +707,36 @@ describe("openCodexThread", () => {
       NodeAssert.equal(opened.thread.id, "fresh-thread");
       NodeAssert.deepStrictEqual(
         calls.map((call) => call.method),
-        ["thread/resume", "thread/start"],
+        ["config/read", "thread/resume", "thread/start"],
       );
+      NodeAssert.deepStrictEqual(calls[2]?.payload, {
+        cwd: "/tmp/project",
+        approvalPolicy: "never",
+        sandbox: "danger-full-access",
+        approvalsReviewer: "user",
+        model: "gpt-5.3-codex",
+        config: { mcp_servers: { checkout: { cwd: "/tmp/project" } } },
+      });
+      const resumePayload = calls[1]?.payload as Record<string, unknown>;
+      NodeAssert.deepStrictEqual(resumePayload.config, {
+        mcp_servers: { checkout: { cwd: "/tmp/project" } },
+      });
     }),
   );
 
   it.effect("propagates non-recoverable resume failures", () =>
     Effect.gen(function* () {
       const client = {
-        request: <M extends "thread/start" | "thread/resume">(
+        request: <M extends "config/read" | "thread/start" | "thread/resume">(
           method: M,
           _payload: CodexRpc.ClientRequestParamsByMethod[M],
         ) => {
+          if (method === "config/read") {
+            return Effect.succeed({
+              config: {},
+              origins: {},
+            } as CodexRpc.ClientRequestResponsesByMethod[M]);
+          }
           if (method === "thread/resume") {
             return Effect.fail(
               new CodexErrors.CodexAppServerRequestError({

@@ -189,6 +189,21 @@ describe("groupSidebarThreads", () => {
     ]);
     expect(group("branch", "name").map((entry) => entry.label)).toEqual(["main", "zeta"]);
   });
+
+  it("orders recent groups by their newest member rather than source insertion order", () => {
+    const result = groupSidebarThreads({
+      grouping: "branch" as const,
+      groupOrder: "recent_activity" as const,
+      // Deliberately old-first: source list order must not decide group order.
+      threads: [thread({ branch: "old" }), thread({ branch: "recent" })],
+      getProject: () => project,
+      getWorkspaceLabel: (path) => path.split("/").at(-1) ?? path,
+      getStatus: () => "ready" as const,
+      getActivityTimestamp: (candidate) => (candidate.branch === "recent" ? 200 : 100),
+    });
+
+    expect(result.map((entry) => entry.label)).toEqual(["recent", "old"]);
+  });
 });
 
 describe("animateSidebarLayoutChanges", () => {

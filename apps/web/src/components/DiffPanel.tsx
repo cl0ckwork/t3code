@@ -240,6 +240,11 @@ export default function DiffPanel({
   const serverConfig = useAtomValue(
     serverEnvironment.configValueAtom(activeThread?.environmentId ?? null),
   );
+  // Live workspace diffs now use only a thread id. Do not fall back to the
+  // legacy client-cwd protocol when a newer client reaches an older host.
+  const supportsThreadScopedReviewDiffs =
+    serverConfig?.environment.capabilities.threadScopedReviewDiffs === true;
+  const reviewDiffHostUnavailable = serverConfig !== null && !supportsThreadScopedReviewDiffs;
   const onFileContextMenu = useFileContextMenuHandler(activeThread?.environmentId ?? null);
   const openInPreferredEditor = useOpenInPreferredEditor(
     activeThread?.environmentId ?? null,
@@ -324,7 +329,7 @@ export default function DiffPanel({
     { enabled: isGitRepo && selectedTurn !== undefined },
   );
   const branchDiffPreview = useEnvironmentQuery(
-    canReadFiles && selectedRunId === null && activeThread
+    canReadFiles && supportsThreadScopedReviewDiffs && selectedRunId === null && activeThread
       ? reviewEnvironment.diffPreview({
           environmentId: activeThread.environmentId,
           input: {
@@ -336,7 +341,11 @@ export default function DiffPanel({
       : null,
   );
   const canRefreshGitDiff =
-    canReadFiles && isGitRepo && selectedRunId === null && activeThread != null;
+    canReadFiles &&
+    supportsThreadScopedReviewDiffs &&
+    isGitRepo &&
+    selectedRunId === null &&
+    activeThread != null;
   const activeThreadRefreshKey = routeThreadRef
     ? `${routeThreadRef.environmentId}:${routeThreadRef.threadId}`
     : null;
@@ -985,6 +994,10 @@ export default function DiffPanel({
             {fileAccess.error ?? "This connection cannot read local diffs."}
           </div>
         )
+      ) : selectedRunId === null && reviewDiffHostUnavailable ? (
+        <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-muted-foreground/70">
+          Update this host to view live workspace diffs.
+        </div>
       ) : (
         <>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">

@@ -10,6 +10,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 const refreshProviders = vi.hoisted(() => vi.fn());
+const workspaceProviderSkills = vi.hoisted(() => ({ current: true }));
 vi.mock("react-native", () => ({ Alert: { alert: vi.fn() } }));
 
 vi.mock("../../state/queries", () => ({
@@ -23,7 +24,15 @@ vi.mock("../../state/use-composer-drafts", () => ({
 }));
 vi.mock("../../lib/uuid", () => ({ uuidv4: () => "context-id" }));
 vi.mock("../../state/server", () => ({
-  serverEnvironment: { refreshProviders: Symbol("refreshProviders") },
+  serverEnvironment: {
+    refreshProviders: Symbol("refreshProviders"),
+    configValueAtom: () => Symbol("serverConfig"),
+  },
+}));
+vi.mock("@effect/atom-react", () => ({
+  useAtomValue: () => ({
+    environment: { capabilities: { workspaceProviderSkills: workspaceProviderSkills.current } },
+  }),
 }));
 vi.mock("../../state/use-atom-command", () => ({
   useAtomCommand: () => refreshProviders,
@@ -157,6 +166,7 @@ describe("workspace command discovery retry", () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
+    workspaceProviderSkills.current = true;
     refreshProviders.mockReset();
     refreshProviders.mockResolvedValue({ _tag: "Success", value: { providers: [provider] } });
     const document = { nodeType: 9, addEventListener() {}, removeEventListener() {} };
@@ -321,5 +331,13 @@ describe("workspace command discovery retry", () => {
     await act(() => vi.advanceTimersByTimeAsync(20_000));
     expect(refreshProviders).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("does not send a workspace refresh to a host without the capability", async () => {
+    workspaceProviderSkills.current = false;
+    await act(async () => {
+      root.render(createElement(Probe, { cwd: "/project-a" }));
+    });
+    expect(refreshProviders).not.toHaveBeenCalled();
   });
 });

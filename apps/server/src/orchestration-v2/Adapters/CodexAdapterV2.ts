@@ -32,7 +32,10 @@ import {
   ProviderDriverKind,
   type ProviderSetupError,
 } from "@t3tools/contracts";
-import { SKILL_MENTION_PATTERN } from "@t3tools/shared/composerInlineTokens";
+import {
+  collectComposerInlineTokens,
+  SKILL_MENTION_PATTERN,
+} from "@t3tools/shared/composerInlineTokens";
 import { AgentScope } from "@t3tools/shared/AgentScope";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import {
@@ -421,6 +424,52 @@ function codexItemStatus(status: "inProgress" | "completed" | "failed" | "declin
  */
 export function codexSkillMentionText(text: string): string {
   return text.replace(SKILL_MENTION_PATTERN, "$1$$$2");
+}
+
+type CodexSkillInput = Extract<CodexSchema.V2TurnStartParams__UserInput, { type: "skill" }>;
+
+/**
+ * Codex's app-server accepts a native skill input alongside the visible
+ * `$skill` text. The text preserves the user's prompt and T3's historical
+ * chips; the structured item makes Codex actually load the skill.
+ *
+ * Appending a delimiter lets the shared composer parser recognize a selected
+ * skill at the end of a sent prompt. That parser also excludes inline and
+ * fenced Markdown code, so a snippet such as `$eq` remains literal.
+ */
+export function selectedCodexSkillNames(text: string): ReadonlyArray<string> {
+  return [
+    ...new Set(
+      collectComposerInlineTokens(`${text} `)
+        .filter((token) => token.type === "skill")
+        .map((token) => token.value),
+    ),
+  ];
+}
+
+export function resolveCodexSkillInputs(input: {
+  readonly text: string;
+  readonly skills: ReadonlyArray<
+    Pick<CodexSchema.V2SkillsListResponse__SkillMetadata, "enabled" | "name" | "path">
+  >;
+}): { readonly inputs: ReadonlyArray<CodexSkillInput> } | { readonly missingSkillName: string } {
+  const names = selectedCodexSkillNames(input.text);
+  const skillsByName = new Map(
+    input.skills.filter((skill) => skill.enabled).map((skill) => [skill.name, skill]),
+  );
+  const missingSkillName = names.find((name) => !skillsByName.has(name));
+  if (missingSkillName !== undefined) {
+    return { missingSkillName };
+  }
+
+  return {
+    inputs: names.flatMap((name) => {
+      const skill = skillsByName.get(name);
+      return skill === undefined
+        ? []
+        : [{ type: "skill" as const, name: skill.name, path: skill.path }];
+    }),
+  };
 }
 
 const BACKGROUND_COMMAND_DETAIL_COMMAND_MAX_LENGTH = 200;
@@ -3143,11 +3192,45 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             } satisfies CodexSchema.V2TurnStartParams__UserInput;
           });
 
+        const resolveSelectedCodexSkillInputs = (input: {
+          readonly text: string;
+          readonly cwd: string | null;
+        }) =>
+          Effect.gen(function* () {
+            if (selectedCodexSkillNames(input.text).length === 0) {
+              return [];
+            }
+            const response = yield* client
+              .request("skills/list", {
+                ...(input.cwd === null ? {} : { cwds: [input.cwd] }),
+                // A picker result may be stale by the time the user sends. A
+                // native skill input has to reference a skill Codex can read now.
+                forceReload: true,
+              })
+              .pipe(
+                Effect.mapError((cause) =>
+                  toProtocolError("Failed to resolve the selected Codex skill.", cause),
+                ),
+              );
+            const skills =
+              input.cwd === null
+                ? response.data.flatMap((entry) => entry.skills)
+                : (response.data.find((entry) => entry.cwd === input.cwd)?.skills ??
+                  response.data.flatMap((entry) => entry.skills));
+            const resolved = resolveCodexSkillInputs({ text: input.text, skills });
+            if ("missingSkillName" in resolved) {
+              return yield* toProtocolError(
+                `Skill '$${resolved.missingSkillName}' is no longer available in this workspace. Refresh the picker and try again.`,
+              );
+            }
+            return resolved.inputs;
+          });
+
         const toCodexInput = (
           turnInput: Pick<
             | ProviderAdapter.ProviderAdapterV2TurnInput
             | ProviderAdapter.ProviderAdapterV2SteerInput,
-            "message"
+            "message" | "runtimePolicy"
           >,
         ) =>
           Effect.gen(function* () {
@@ -3170,6 +3253,14 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               { concurrency: 1 },
             );
             inputItems.push(...attachmentItems);
+            inputItems.push(
+              ...(yield* resolveSelectedCodexSkillInputs({
+                text: turnInput.message.text,
+                // Steer inputs inherit the session's workspace and do not
+                // always carry their own runtime policy.
+                cwd: turnInput.runtimePolicy?.cwd ?? input.runtimePolicy.cwd,
+              })),
+            );
             if (inputItems.length === 0) {
               return yield* toProtocolError("Turn requires non-empty text or attachments.");
             }

@@ -1036,6 +1036,8 @@ export function groupSidebarThreads<
   ) => { readonly title: string; readonly workspaceRoot: string } | null;
   readonly getWorkspaceLabel: (worktreePath: string) => string;
   readonly getStatus: (thread: TThread) => SidebarThreadStatus;
+  /** The latest activity represented by this row. */
+  readonly getActivityTimestamp?: (thread: TThread) => number;
 }): readonly SidebarThreadGroup<TThread>[] {
   if (input.grouping === "none") {
     return [{ key: "all", label: "All sessions", threads: input.threads }];
@@ -1043,7 +1045,12 @@ export function groupSidebarThreads<
 
   const groups = new Map<
     string,
-    { label: string; threads: TThread[]; worktreeBranches: Set<string> }
+    {
+      label: string;
+      threads: TThread[];
+      worktreeBranches: Set<string>;
+      latestActivityTimestamp: number;
+    }
   >();
   for (const thread of input.threads) {
     const project = input.getProject(thread);
@@ -1085,15 +1092,22 @@ export function groupSidebarThreads<
           };
       }
     })();
+    const activityTimestamp = input.getActivityTimestamp?.(thread) ?? 0;
+    const safeActivityTimestamp = Number.isFinite(activityTimestamp) ? activityTimestamp : 0;
     const existing = groups.get(group.key);
     if (existing) {
       existing.threads.push(thread);
       if (group.worktreeBranch) existing.worktreeBranches.add(group.worktreeBranch);
+      existing.latestActivityTimestamp = Math.max(
+        existing.latestActivityTimestamp,
+        safeActivityTimestamp,
+      );
     } else {
       groups.set(group.key, {
         label: group.label,
         threads: [thread],
         worktreeBranches: new Set(group.worktreeBranch ? [group.worktreeBranch] : []),
+        latestActivityTimestamp: safeActivityTimestamp,
       });
     }
   }
@@ -1102,10 +1116,15 @@ export function groupSidebarThreads<
     key,
     label: group.worktreeBranches.size === 1 ? [...group.worktreeBranches][0]! : group.label,
     threads: group.threads,
+    latestActivityTimestamp: group.latestActivityTimestamp,
   }));
-  return input.groupOrder === "name"
-    ? result.toSorted((left, right) => left.label.localeCompare(right.label))
-    : result;
+  const ordered =
+    input.groupOrder === "name"
+      ? result.toSorted((left, right) => left.label.localeCompare(right.label))
+      : result.toSorted(
+          (left, right) => right.latestActivityTimestamp - left.latestActivityTimestamp,
+        );
+  return ordered.map(({ latestActivityTimestamp: _, ...group }) => group);
 }
 
 /** NaN-safe Date.parse for sort comparators: a malformed timestamp must not

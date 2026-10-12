@@ -93,6 +93,7 @@ describe("projectScripts helpers", () => {
       icon: "configure" as const,
       runOnWorktreeCreate: false,
       waitForSetup: false,
+      runOnSettle: false,
       previewUrl: null,
       autoOpenPreview: false,
     };
@@ -188,6 +189,7 @@ describe("projectScripts helpers", () => {
       command: "true",
       icon: "play",
       waitForSetup: false,
+      runOnThreadSettle: false,
       previewUrl: null,
       autoOpenPreview: false,
     } as const;

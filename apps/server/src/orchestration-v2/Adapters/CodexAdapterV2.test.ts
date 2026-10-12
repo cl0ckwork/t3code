@@ -1474,6 +1474,40 @@ describe("CodexAdapterV2 skill mentions", () => {
       assert.equal(CodexAdapterV2.codexSkillMentionText(text), expected, text);
     }
   });
+
+  it("attaches each selected skill once and keeps code-looking text literal", () => {
+    const resolved = CodexAdapterV2.resolveCodexSkillInputs({
+      text: "Use $review and $review with ` $eq ` then $ship",
+      skills: [
+        { name: "review", path: "/skills/review/SKILL.md", enabled: true },
+        { name: "ship", path: "/skills/ship/SKILL.md", enabled: true },
+      ],
+    });
+
+    assert.deepEqual(resolved, {
+      inputs: [
+        { type: "skill", name: "review", path: "/skills/review/SKILL.md" },
+        { type: "skill", name: "ship", path: "/skills/ship/SKILL.md" },
+      ],
+    });
+  });
+
+  it("blocks a selected skill that is missing or disabled at send time", () => {
+    assert.deepEqual(
+      CodexAdapterV2.resolveCodexSkillInputs({
+        text: "$review",
+        skills: [{ name: "review", path: "/skills/review/SKILL.md", enabled: false }],
+      }),
+      { missingSkillName: "review" },
+    );
+    assert.deepEqual(
+      CodexAdapterV2.resolveCodexSkillInputs({
+        text: "$review",
+        skills: [],
+      }),
+      { missingSkillName: "review" },
+    );
+  });
 });
 
 describe("CodexAdapterV2 background command detail", () => {
@@ -1609,7 +1643,48 @@ function codexReplayPreamble(input: {
   readonly nativeTurnId: string;
   readonly prompt: string;
   readonly sentPrompt?: string;
+  readonly selectedSkills?: ReadonlyArray<{ readonly name: string; readonly path: string }>;
 }): Array<CodexReplay.CodexAppServerReplayEntry> {
+  const skillsListEntries =
+    input.selectedSkills === undefined
+      ? []
+      : [
+          {
+            type: "expect_outbound" as const,
+            label: "skills/list",
+            frame: {
+              id: 3,
+              method: "skills/list",
+              params: { cwds: ["/workspace"], forceReload: true },
+            },
+          },
+          {
+            type: "emit_inbound" as const,
+            label: "skills/list",
+            frame: {
+              id: 3,
+              result: {
+                data: [
+                  {
+                    cwd: "/workspace",
+                    errors: [],
+                    skills: input.selectedSkills.map((skill) => ({
+                      ...skill,
+                      description: "Test skill",
+                      enabled: true,
+                      scope: "repo",
+                    })),
+                  },
+                ],
+              },
+            },
+          },
+        ];
+  const turnStartRequestId = input.selectedSkills === undefined ? 3 : 4;
+  const turnInput = [
+    { type: "text" as const, text: input.sentPrompt ?? input.prompt },
+    ...(input.selectedSkills ?? []).map((skill) => ({ type: "skill" as const, ...skill })),
+  ];
   return [
     {
       type: "expect_outbound",
@@ -1691,15 +1766,16 @@ function codexReplayPreamble(input: {
         },
       },
     },
+    ...skillsListEntries,
     {
       type: "expect_outbound",
       label: "turn/start",
       frame: {
-        id: 3,
+        id: turnStartRequestId,
         method: "turn/start",
         params: {
           threadId: input.nativeThreadId,
-          input: [{ type: "text", text: input.sentPrompt ?? input.prompt }],
+          input: turnInput,
           cwd: "/workspace",
           model: "gpt-5.4",
           approvalPolicy: "never",
@@ -1713,7 +1789,7 @@ function codexReplayPreamble(input: {
       type: "emit_inbound",
       label: "turn/start",
       frame: {
-        id: 3,
+        id: turnStartRequestId,
         result: { turn: makeCodexReplayTurn({ id: input.nativeTurnId, status: "inProgress" }) },
       },
     },
@@ -2571,16 +2647,53 @@ describe("CodexAdapterV2 post-settle continuation", () => {
             nativeTurnId,
             prompt: "€review do it",
             sentPrompt: "$review do it",
+            selectedSkills: [{ name: "review", path: "/skills/review/SKILL.md" }],
           }),
+          {
+            type: "expect_outbound",
+            label: "skills/list/steer",
+            frame: {
+              id: 5,
+              method: "skills/list",
+              params: { cwds: ["/workspace"], forceReload: true },
+            },
+          },
+          {
+            type: "emit_inbound",
+            label: "skills/list/steer",
+            frame: {
+              id: 5,
+              result: {
+                data: [
+                  {
+                    cwd: "/workspace",
+                    errors: [],
+                    skills: [
+                      {
+                        name: "ship",
+                        path: "/skills/ship/SKILL.md",
+                        description: "Test skill",
+                        enabled: true,
+                        scope: "repo",
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          },
           {
             type: "expect_outbound",
             label: "turn/steer",
             frame: {
-              id: 4,
+              id: 6,
               method: "turn/steer",
               params: {
                 expectedTurnId: nativeTurnId,
-                input: [{ type: "text", text: "then $ship it" }],
+                input: [
+                  { type: "text", text: "then $ship it" },
+                  { type: "skill", name: "ship", path: "/skills/ship/SKILL.md" },
+                ],
                 threadId: nativeThreadId,
               },
             },
@@ -2588,7 +2701,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
           {
             type: "emit_inbound",
             label: "turn/steer",
-            frame: { id: 4, result: { turnId: nativeTurnId } },
+            frame: { id: 6, result: { turnId: nativeTurnId } },
           },
         ],
       });

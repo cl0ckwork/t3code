@@ -686,7 +686,9 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
       >
         {!voiceInput.isBusy &&
         composerMenu.trigger &&
-        (composerMenu.items.length > 0 || composerMenu.trigger.kind === "pull-request") ? (
+        (composerMenu.items.length > 0 ||
+          composerMenu.error !== null ||
+          composerMenu.trigger.kind === "pull-request") ? (
           <ComposerPopoverAnchor>
             <ComposerCommandPopover
               items={composerMenu.items}

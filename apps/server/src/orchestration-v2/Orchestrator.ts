@@ -146,7 +146,6 @@ import {
 } from "./ThreadForkService.ts";
 import { planThreadDeletion } from "./ThreadDeletion.ts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
-import * as ServerSettings from "../serverSettings.ts";
 
 export class OrchestratorDispatchError extends Schema.TaggedError<OrchestratorDispatchError>()(
   "OrchestratorDispatchError",
@@ -3380,7 +3379,13 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         yield* Ref.update(effects, (existing) => [
           ...existing,
           ...projectScripts
-            .filter((script) => script.lifecycleTriggers?.includes("thread.settled"))
+            // `runOnSettle` is the native cleanup role. It is executed by
+            // ThreadSettlementService in a worktree-only shell; the generic
+            // lifecycle runner would otherwise invoke the same script twice.
+            .filter(
+              (script) =>
+                script.runOnSettle !== true && script.lifecycleTriggers?.includes("thread.settled"),
+            )
             .map(
               (script) =>
                 ({

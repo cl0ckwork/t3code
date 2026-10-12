@@ -110,4 +110,19 @@ describe("ExecutionEnvironmentDescriptor", () => {
       }).capabilities.serverResolvedCommandContext,
     ).toBe(true);
   });
+
+  it("keeps server-resolved workspace capabilities optional for older hosts", () => {
+    expect(decodeDescriptor(descriptor).capabilities.threadScopedReviewDiffs).toBeUndefined();
+    expect(decodeDescriptor(descriptor).capabilities.workspaceProviderSkills).toBeUndefined();
+    expect(
+      decodeDescriptor({
+        ...descriptor,
+        capabilities: {
+          ...descriptor.capabilities,
+          threadScopedReviewDiffs: true,
+          workspaceProviderSkills: true,
+        },
+      }).capabilities,
+    ).toMatchObject({ threadScopedReviewDiffs: true, workspaceProviderSkills: true });
+  });
 });

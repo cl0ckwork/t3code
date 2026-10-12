@@ -125,6 +125,15 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   threadVisitedTracking: Schema.optionalKey(Schema.Boolean),
   threadPullRequestLinking: Schema.optionalKey(Schema.Boolean),
   serverResolvedCommandContext: Schema.optionalKey(Schema.Boolean),
+  /** Server resolves the workspace for review-diff RPCs from the persisted
+      thread. Older servers expect a client-provided path, so clients must not
+      issue the newer thread-only review requests when this is absent. */
+  threadScopedReviewDiffs: Schema.optionalKey(Schema.Boolean),
+  /** Server resolves the workspace for provider skills and slash-command
+      discovery from persisted project/thread records. Older servers do not
+      understand the project/thread request and must not be sent a client cwd
+      as a fallback. */
+  workspaceProviderSkills: Schema.optionalKey(Schema.Boolean),
   threadPullRequests: Schema.optionalKey(Schema.Boolean),
   threadPullRequestWatch: Schema.optionalKey(Schema.Boolean),
   pullRequestStackActions: Schema.optionalKey(Schema.Boolean),

@@ -65,6 +65,7 @@ vi.mock("./reviewState", () => ({
 
 import { setReviewSelectedSectionId, type ReviewCacheForThread } from "./reviewState";
 import { useReviewSections } from "./useReviewSections";
+import { reviewEnvironment } from "../../state/review";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -116,6 +117,7 @@ function makeInput(reviewCache = makeReviewCache()) {
   return {
     environmentId: EnvironmentId.make("environment"),
     threadId: ThreadId.make("thread"),
+    supportsThreadScopedReviewDiffs: true,
     reviewCache,
   };
 }
@@ -137,6 +139,18 @@ it("hides cached local diffs after file access is lost while retaining checkpoin
   expect(denied.selectedSection?.diff).toBe(checkpointDiff);
 
   expect(setReviewSelectedSectionId).toHaveBeenCalledWith("environment:thread", "turn:1");
+});
+
+it("does not request live workspace diffs from a host without thread-scoped review support", () => {
+  const input = {
+    ...makeInput(),
+    supportsThreadScopedReviewDiffs: false,
+    threadScopedReviewDiffsUnavailable: true,
+  };
+  const result = renderSections(input);
+
+  expect(reviewEnvironment.diffPreview).not.toHaveBeenCalled();
+  expect(result.error).toBe("Update this host to view live workspace diffs.");
 });
 
 it.each(["working-tree", "branch-range"] as const)(

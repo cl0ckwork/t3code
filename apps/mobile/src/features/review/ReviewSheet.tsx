@@ -448,6 +448,11 @@ export function ReviewSheet(props: ReviewSheetProps) {
   const environment = useEnvironmentPresentation(environmentId);
   const retryEnvironment = useAtomCommand(environmentCatalog.retryNow, "environment retry");
   const isEnvironmentReady = environment.presentation?.connection.phase === "connected";
+  const supportsThreadScopedReviewDiffs =
+    environment.presentation?.serverConfig?.environment.capabilities.threadScopedReviewDiffs ===
+    true;
+  const threadScopedReviewDiffsUnavailable =
+    environment.presentation?.serverConfig !== null && !supportsThreadScopedReviewDiffs;
   const { draftMessage } = useThreadDraftForThread({ environmentId, threadId });
   const reviewCache = useReviewCacheForThread({ environmentId, threadId });
   const { selectedThreadCwd } = useSelectedThreadWorktree();
@@ -470,6 +475,8 @@ export function ReviewSheet(props: ReviewSheetProps) {
     diffPreviewRevision,
   } = useReviewSections({
     enabled: isEnvironmentReady,
+    supportsThreadScopedReviewDiffs,
+    threadScopedReviewDiffsUnavailable,
     environmentId,
     threadId,
     reviewCache,

@@ -46,6 +46,7 @@ import {
   resolveProviderSlashCommandsForCwd,
 } from "@t3tools/client-runtime/providerSkills";
 import { useEffect, useRef, useState } from "react";
+import { useAtomValue } from "@effect/atom-react";
 
 import type { ComposerEditorSelection } from "../../components/ComposerEditor";
 import { serverEnvironment } from "../../state/server";
@@ -207,6 +208,11 @@ export function useComposerCommandMenu({
   readonly onUpdateInteractionMode?: (mode: ProviderInteractionMode) => void;
   readonly onUsageLimits?: () => void;
 }) {
+  const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
+  // Never fall back to the pre-capability cwd protocol: that would let a
+  // remote client choose which host directory gets scanned.
+  const supportsWorkspaceProviderSkills =
+    serverConfig?.environment.capabilities.workspaceProviderSkills === true;
   const [selection, setSelection] = useState(() => composerSelectionAtEnd(draftMessage));
   const previousOwnerKeyRef = useRef(ownerKey);
   const onSelectionChange = (nextSelection: ComposerEditorSelection) => {
@@ -286,7 +292,14 @@ export function useComposerCommandMenu({
     hadWorkspaceSnapshotRef.current = hasWorkspaceSnapshot;
   }, [hasWorkspaceSnapshot]);
   useEffect(() => {
-    if (!environmentId || !projectCwd || !workspaceProjectId || !selectedProviderInstanceId) return;
+    if (
+      !supportsWorkspaceProviderSkills ||
+      !environmentId ||
+      !projectCwd ||
+      !workspaceProjectId ||
+      !selectedProviderInstanceId
+    )
+      return;
     const key = `${environmentId}:${selectedProviderInstanceId}:${projectCwd}`;
     const now = Date.now();
     const lastRequest = workspaceRefreshKeyRef.current;
@@ -339,6 +352,7 @@ export function useComposerCommandMenu({
     selectedProviderInstanceId,
     selectedProviderStatus,
     workspaceRefreshRetry,
+    supportsWorkspaceProviderSkills,
   ]);
 
   const trigger = (() => {
@@ -631,11 +645,13 @@ export function useComposerCommandMenu({
     isLoading:
       trigger?.kind === "pull-request" ? pullRequestSearch.isPending : pathSearch.isPending,
     error:
-      trigger?.kind === "pull-request"
-        ? pullRequestProjectId === null || pullRequestRepository === null
-          ? "Pull requests are unavailable for this project."
-          : pullRequestSearch.error
-        : null,
+      trigger?.kind === "skill" && serverConfig !== null && !supportsWorkspaceProviderSkills
+        ? "Update this host to use workspace skills."
+        : trigger?.kind === "pull-request"
+          ? pullRequestProjectId === null || pullRequestRepository === null
+            ? "Pull requests are unavailable for this project."
+            : pullRequestSearch.error
+          : null,
     onSelect,
   };
 }

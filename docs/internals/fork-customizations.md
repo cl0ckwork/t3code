@@ -35,10 +35,35 @@ Keep these invariants on rebase:
 - A missing or unreadable thread returns a typed workspace error. It must not silently diff a
   different repository.
 
+### Mixed-version environments
+
+The fork's review-diff and workspace-skill RPCs deliberately replace client `cwd` with persisted
+thread/project context. A newer client connected through T3 Connect to an older host must never
+fall back to sending a path just to regain that feature.
+
+`threadScopedReviewDiffs` and `workspaceProviderSkills` are environment capabilities. A client
+issues the thread/project-scoped requests only when the connected host advertises the matching
+capability. Otherwise it keeps the safety boundary and explains that the host needs an update;
+it does not make an unrelated live-diff request or scan the launch directory.
+
 ## Workspace-scoped provider skills
 
 T3 Code's provider snapshot is global process state, but a repository skill belongs to the active
 project checkout or thread worktree. The fork makes those scopes explicit.
+
+### Upstream ownership and fork boundary
+
+Upstream owns normal provider discovery, the unified `/` and `$` picker, picker deduplication,
+workspace-snapshot freshness, and Claude's native selected-skill execution. Do not reintroduce a
+second skill inventory or a client-side cache to duplicate those mechanisms.
+
+The fork deliberately keeps only the parts upstream does not yet provide equivalently:
+
+- workspace selection is derived on the server from persisted project/thread state rather than a
+  client-provided path;
+- `/` may select another skill after an existing selection, as may `$`;
+- inline Markdown code and fenced code remain literal;
+- Codex selected skills are validated at dispatch and sent as native structured inputs.
 
 ### Required behavior
 
@@ -51,8 +76,9 @@ project checkout or thread worktree. The fork makes those scopes explicit.
 - Precedence is `user/global < .agents/skills < .claude/skills`. A picker remains loading while a
   workspace snapshot is being read, even if global skills are already available.
 - Codex turns with explicit selected skills re-resolve the names against the current workspace
-  immediately before sending. The resulting native skill input is attached to the Codex request;
-  visible `$skill` text is not sufficient. A missing, stale, or timed-out skill blocks the send.
+  immediately before sending or steering. The resulting native `{ type: "skill", name, path }`
+  input is attached to the Codex request; visible `$skill` text is not sufficient. A missing,
+  stale, disabled, or timed-out skill blocks the dispatch.
 - Selected-skill metadata is persisted with the message so old chips still render after a skill is
   renamed or deleted.
 
@@ -68,7 +94,9 @@ composer renders the matching workspace snapshot through the shared `providerSki
 This is a trust boundary, not a client-side convenience. A thread must belong to the supplied
 project, a deleted project or thread fails the refresh, and a forged path cannot cause the server
 to scan another directory. Provider adapters remain responsible for native structured skill input
-at dispatch time; visible `$skill` text alone is never an attachment contract.
+at dispatch time; visible `$skill` text alone is never an attachment contract. For Codex, the
+adapter calls `skills/list` with the runtime workspace and `forceReload: true`, then appends one
+native skill input for each unique selected skill to `turn/start` or `turn/steer`.
 
 Tests to preserve include forged paths, root/worktree selection, collisions, deletion, timeouts,
 and the Codex cwd/structured-skill attachment. Test the picker trigger/chip behavior separately.
@@ -146,19 +174,21 @@ back to the directory basename while branch creation is still pending or thread 
 Do not rename a live worktree merely to improve this label: Git, persisted thread state, and a
 running provider may all hold its path.
 
-Two lifecycle lists are intentional:
+Upstream lifecycle shelves stay structurally above grouping:
 
-- Active/pinned/snoozed sessions are derived and grouped together.
-- Settled sessions are derived and grouped separately, with their own settled-time ordering.
+- **Pinned**, **Working**, and **Snoozed** preserve their own membership, controls, counts, and
+  collapse behavior. A grouping never moves their rows into another shelf.
+- Grouping applies within ordinary **Active** rows and separately within **Settled** rows. Settled
+  retains its own shelf and settled-time ordering.
 
-Every visible thread must appear exactly once in one of those two lists. Group headers render only
-for groups with members in that lifecycle list, and their React keys include the lifecycle section
-as well as the group key. Otherwise an unsettle can leave an empty header or active and settled
-headers can collide when they share a label.
+Every visible thread must appear exactly once in exactly one shelf. Group headers render only for
+groups with members in that shelf, and their React keys include the shelf as well as the group key.
+Otherwise an unsettle can leave an empty header or two shelves can collide when they share a label.
 
-List-motion is deliberately disabled while grouping is enabled. Its sortable-layout baseline does
-not include group headers, so animating a status or worktree transition can leave stale cloned
-headers in the DOM. Ungrouped mode keeps the existing row and drag-release animations.
+Group order by recent activity uses the most recent thread activity in each group, not insertion
+order. Drag/reorder and sweep interactions are disabled while grouping is enabled: their canonical
+sortable layout has no group headers, so letting it operate against grouped DOM can apply a drop to
+a different row. Ungrouped mode keeps the existing row and drag-release interactions.
 
 ## Project action lifecycle hooks
 
@@ -167,6 +197,10 @@ settlement trigger applies to both user-initiated and automatic settlement, but 
 real active-to-settled transition. Repeating Settle on an already settled thread must not launch a
 second cleanup action; an explicit unsettle followed by a later settle is a new transition and may
 launch it again.
+
+Upstream's `runOnSettle` is a different, worktree-only cleanup role. If a script has that role,
+the upstream cleanup runner owns it and the generic `thread.settled` outbox must skip it. The roles
+are mutually exclusive so one command cannot run twice for one settlement.
 
 The trigger is stored in [`ProjectScript`](../../packages/contracts/src/project.ts) as an extensible
 `lifecycleTriggers` list. The action editor exposes the current `thread.settled` trigger, imports it

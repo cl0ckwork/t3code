@@ -31,12 +31,18 @@ import {
 
 export function useReviewSections(input: {
   readonly enabled?: boolean;
+  /** New clients send thread-only review RPCs. Old hosts expect a client cwd,
+      so leave live workspace diffs unavailable rather than weakening that boundary. */
+  readonly supportsThreadScopedReviewDiffs?: boolean;
+  /** The host has published a config but does not support the safe review protocol. */
+  readonly threadScopedReviewDiffsUnavailable?: boolean;
   readonly environmentId?: EnvironmentId;
   readonly threadId?: ThreadId;
   readonly reviewCache: ReviewCacheForThread;
 }) {
   const { environmentId, reviewCache, threadId } = input;
   const enabled = input.enabled ?? true;
+  const supportsThreadScopedReviewDiffs = input.supportsThreadScopedReviewDiffs === true;
   const fileAccessSession = useEnvironmentQuery(
     environmentId === undefined ? null : environmentSession.sessionStateAtom(environmentId),
   );
@@ -50,7 +56,11 @@ export function useReviewSections(input: {
   const { canReadFiles } = fileAccess;
   const selectedThread = useSelectedThreadProjection();
   const diffPreview = useEnvironmentQuery(
-    canReadFiles && enabled && environmentId !== undefined && threadId !== undefined
+    canReadFiles &&
+      supportsThreadScopedReviewDiffs &&
+      enabled &&
+      environmentId !== undefined &&
+      threadId !== undefined
       ? reviewEnvironment.diffPreview({
           environmentId,
           input: { threadId },
@@ -206,6 +216,9 @@ export function useReviewSections(input: {
       diffPreview.error ??
       activeTurnDiff.error ??
       reviewCache.asyncState.error ??
+      (input.threadScopedReviewDiffsUnavailable === true && selectedSection?.kind !== "turn"
+        ? "Update this host to view live workspace diffs."
+        : null) ??
       (selectedSection === null && !fileAccess.isPending && !canReadFiles
         ? (fileAccess.error ?? "This connection cannot read local diffs.")
         : null),

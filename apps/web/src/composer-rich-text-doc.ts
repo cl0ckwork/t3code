@@ -1137,10 +1137,9 @@ function walkList(list: ProseMirrorNode, listStart: number, acc: RichAccumulator
 }
 
 /**
- * The code is literal text in the editor, but the draft store still counts a
- * chip's source in it as one cursor position, as it does everywhere. So the
- * run splits at each chip source, which spans its characters in the document
- * and one position in the collapsed space.
+ * Code is literal text, including any apparent skill source inside it. One
+ * run preserves the fence delimiters and keeps inline-chip decorations out of
+ * the block while cursor mapping remains consistent with other source spans.
  */
 function appendCodeBlockRun(
   block: ProseMirrorNode,
@@ -1149,13 +1148,9 @@ function appendCodeBlockRun(
   acc: RichAccumulator,
 ): void {
   const { open, content, close } = codeBlockSource(block, followed);
-  const pieces = content
-    ? splitPromptIntoComposerSegments(content).map((segment) =>
-        segment.type === "text"
-          ? { length: segment.text.length, collapsedLen: segment.text.length }
-          : { length: segment.source.length, collapsedLen: 1 },
-      )
-    : [{ length: 0, collapsedLen: 0 }];
+  // Code fences are deliberately literal: `@mention`, `$skill`, and `$eq`
+  // inside them must retain their source length in every cursor coordinate.
+  const pieces = [{ length: content.length, collapsedLen: content.length }];
   let offset = 0;
   pieces.forEach((piece, index) => {
     const openLen = index === 0 ? open.length : 0;

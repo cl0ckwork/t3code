@@ -1757,6 +1757,58 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
     }),
   );
 
+  it.effect("defers a combined settlement action to the native cleanup runner", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const outbox = yield* EffectOutbox.EffectOutboxV2;
+      const threadId = ThreadId.make("runtime-layer-native-settlement-action-thread");
+      const projectId = ProjectId.make("runtime-layer-native-settlement-action-project");
+      const commandId = CommandId.make("runtime-layer-native-settlement-action-settle");
+
+      yield* seedProject({
+        projectId,
+        title: "Native settlement action project",
+        workspaceRoot: "/workspace/native-settlement-action",
+        defaultModelSelection: null,
+        createdAt: "2026-10-12T00:00:00.000Z",
+        scripts: [
+          {
+            id: "cleanup",
+            name: "Cleanup preview",
+            command: "pnpm cleanup-preview",
+            icon: "configure" as const,
+            runOnWorktreeCreate: false,
+            runOnSettle: true,
+            lifecycleTriggers: ["thread.settled" as const],
+          },
+        ],
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make("runtime-layer-native-settlement-action-create"),
+        threadId,
+        projectId,
+        title: "Native settlement action thread",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: "feature/native-cleanup",
+        worktreePath: "/workspace/native-settlement-action-worktree",
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.settle",
+        commandId,
+        threadId,
+      });
+
+      // The generic lifecycle outbox must not duplicate the native
+      // ThreadSettlementService cleanup invocation.
+      assert.lengthOf(yield* outbox.listByCommandId(commandId), 0);
+    }),
+  );
+
   it.effect("applies lifecycle commands idempotently and emits archive/removal shell deltas", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;

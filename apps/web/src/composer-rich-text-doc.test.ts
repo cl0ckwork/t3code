@@ -862,7 +862,7 @@ describe("composer rich text document model", () => {
     expect(roundTrip("```\ncode").value).toBe("```\ncode");
   });
 
-  it("counts a chip's source in a fence as one cursor position, as the draft store does", () => {
+  it("keeps fence cursor coordinates aligned with literal draft text", () => {
     const value = "```\nsee @b.md now\n```\nafter";
     const map = roundTrip(value);
     expect(map.value).toBe(value);

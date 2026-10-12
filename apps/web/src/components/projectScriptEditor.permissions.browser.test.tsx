@@ -52,6 +52,7 @@ const request: ProjectScriptEditorRequest = {
     command: "vp test",
     icon: "test",
     runOnWorktreeCreate: false,
+    runOnThreadSettle: false,
     waitForSetup: false,
     runOnSettle: false,
     keybinding: "mod+k",

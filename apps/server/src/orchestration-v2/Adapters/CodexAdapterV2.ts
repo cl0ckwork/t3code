@@ -472,6 +472,21 @@ export function resolveCodexSkillInputs(input: {
   };
 }
 
+/**
+ * A selected skill must come from the workspace the turn will run in. Codex
+ * may return entries for other workspaces in the same response; using one as
+ * a fallback would attach an arbitrary same-named skill to this turn.
+ */
+export function codexSkillsForWorkspace(
+  data: ReadonlyArray<CodexSchema.V2SkillsListResponse__SkillsListEntry>,
+  cwd: string | null,
+): ReadonlyArray<CodexSchema.V2SkillsListResponse__SkillMetadata> | undefined {
+  if (cwd === null) {
+    return data.flatMap((entry) => entry.skills);
+  }
+  return data.find((entry) => entry.cwd === cwd)?.skills;
+}
+
 const BACKGROUND_COMMAND_DETAIL_COMMAND_MAX_LENGTH = 200;
 const BACKGROUND_COMMAND_DETAIL_OUTPUT_TAIL_MAX_LENGTH = 1_000;
 
@@ -3212,11 +3227,12 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                   toProtocolError("Failed to resolve the selected Codex skill.", cause),
                 ),
               );
-            const skills =
-              input.cwd === null
-                ? response.data.flatMap((entry) => entry.skills)
-                : (response.data.find((entry) => entry.cwd === input.cwd)?.skills ??
-                  response.data.flatMap((entry) => entry.skills));
+            const skills = codexSkillsForWorkspace(response.data, input.cwd);
+            if (skills === undefined) {
+              return yield* toProtocolError(
+                "Could not resolve the selected Codex skill for this workspace. Refresh the picker and try again.",
+              );
+            }
             const resolved = resolveCodexSkillInputs({ text: input.text, skills });
             if ("missingSkillName" in resolved) {
               return yield* toProtocolError(

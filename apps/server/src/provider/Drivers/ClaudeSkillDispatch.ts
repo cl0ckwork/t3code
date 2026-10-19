@@ -6,13 +6,7 @@
  *    (anthropics/claude-code#87113).
  */
 
-/**
- * Same token shape the composer and timeline chips recognise
- * (`packages/shared/src/composerInlineTokens.ts`), so a rendered chip and a
- * dispatched skill are always the same set.
- */
-const SKILL_MENTION_PATTERN =
-  /(^|\s)\p{Sc}(?![0-9][0-9_]*(?:[kKmMbBtT]|[eE][0-9]+)?(?:\s|$))(?=[a-zA-Z0-9:_-]*[a-zA-Z])([a-zA-Z0-9][a-zA-Z0-9:_-]*)(?=\s|$)/gu;
+import { collectComposerInlineTokens } from "@t3tools/shared/composerInlineTokens";
 
 export interface ClaudeSkillDispatch {
   readonly leadingText: string | undefined;
@@ -25,12 +19,14 @@ export function planClaudeSkillDispatch(
   prompt: string,
   skillNames: ReadonlySet<string>,
 ): ClaudeSkillDispatch | undefined {
-  const mentions = [...prompt.matchAll(SKILL_MENTION_PATTERN)].flatMap((match) => {
-    const name = match[2] ?? "";
-    if (!skillNames.has(name)) return [];
-    const start = (match.index ?? 0) + (match[1]?.length ?? 0);
-    return [{ name, start, end: (match.index ?? 0) + match[0].length }];
-  });
+  // The composer treats Markdown code as literal. Appending a delimiter makes
+  // a final `$skill` visible to that same parser without changing its range in
+  // the source prompt.
+  const mentions = collectComposerInlineTokens(`${prompt} `).flatMap((token) =>
+    token.type === "skill" && skillNames.has(token.value)
+      ? [{ name: token.value, start: token.start, end: token.end }]
+      : [],
+  );
   const last = mentions.at(-1);
   if (!last) {
     return undefined;

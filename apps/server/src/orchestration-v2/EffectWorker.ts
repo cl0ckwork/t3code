@@ -505,6 +505,18 @@ export const layerExecutor: Layer.Layer<
             // generator boundary.
             const request = effect.request;
             return Effect.gen(function* () {
+              // The effect is intentionally asynchronous. A user can re-engage
+              // the thread after it was queued, in which case running a settle
+              // hook would modify an active workspace. Legacy root-checkout
+              // rows are also unsafe because that checkout can be shared.
+              const projection = yield* threads.getThreadProjection(effect.threadId);
+              if (
+                projection.thread.settledOverride !== "settled" ||
+                request.worktreePath === null ||
+                request.cwd !== request.worktreePath
+              ) {
+                return;
+              }
               if (Option.isNone(terminals)) {
                 return yield* new OrchestrationEffectExecutionError({
                   effectId: effect.id,

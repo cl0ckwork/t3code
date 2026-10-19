@@ -1809,6 +1809,50 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
     }),
   );
 
+  it.effect("does not run generic settlement actions in a shared checkout", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const outbox = yield* EffectOutbox.EffectOutboxV2;
+      const threadId = ThreadId.make("runtime-layer-root-settlement-action-thread");
+      const projectId = ProjectId.make("runtime-layer-root-settlement-action-project");
+      const commandId = CommandId.make("runtime-layer-root-settlement-action-settle");
+      yield* seedProject({
+        projectId,
+        title: "Root settlement action project",
+        workspaceRoot: "/workspace/root-settlement-action",
+        defaultModelSelection: null,
+        createdAt: "2026-10-12T00:00:00.000Z",
+        scripts: [
+          {
+            id: "cleanup",
+            name: "Cleanup preview",
+            command: "pnpm cleanup-preview",
+            icon: "configure" as const,
+            runOnWorktreeCreate: false,
+            lifecycleTriggers: ["thread.settled" as const],
+          },
+        ],
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make("runtime-layer-root-settlement-action-create"),
+        threadId,
+        projectId,
+        title: "Root settlement action thread",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: "main",
+        worktreePath: null,
+      });
+      yield* orchestrator.dispatch({ type: "thread.settle", commandId, threadId });
+
+      assert.lengthOf(yield* outbox.listByCommandId(commandId), 0);
+    }),
+  );
+
   it.effect("applies lifecycle commands idempotently and emits archive/removal shell deltas", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;

@@ -2,6 +2,7 @@ import { assert, it } from "@effect/vitest";
 import {
   CommandId,
   NodeId,
+  type OrchestrationV2ThreadProjection,
   ProviderSessionId,
   ProviderThreadId,
   ProviderTurnId,
@@ -154,10 +155,7 @@ function layerExecutorFor(input: {
   const dependenciesWithOptionalTerminal =
     input.terminal === undefined
       ? layerDependencies
-      : Layer.merge(
-          layerDependencies,
-          Layer.mock(TerminalManager.TerminalManager)(input.terminal),
-        );
+      : Layer.merge(layerDependencies, Layer.mock(TerminalManager.TerminalManager)(input.terminal));
   return EffectWorker.layerExecutor.pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -280,6 +278,12 @@ it.effect("runs a settlement action in the workspace captured by its outbox item
         open: (input) => Ref.set(opened, input).pipe(Effect.as({} as never)),
         write: (input) => Ref.set(written, input),
       },
+      threads: {
+        getThreadProjection: () =>
+          Effect.succeed({
+            thread: { id: threadId, settledOverride: "settled" },
+          } as OrchestrationV2ThreadProjection),
+      },
     });
 
     yield* Effect.gen(function* () {
@@ -304,6 +308,112 @@ it.effect("runs a settlement action in the workspace captured by its outbox item
       terminalId: "hook-effect-thread-lifecycle-cleanup",
       data: "pnpm cleanup-preview\r",
     });
+  }),
+);
+
+it.effect("skips a settlement action when the thread was re-engaged", () =>
+  Effect.gen(function* () {
+    const now = DateTime.formatIso(yield* DateTime.now);
+    const opened = yield* Ref.make<
+      Parameters<TerminalManager.TerminalManager["Service"]["open"]>[0] | null
+    >(null);
+    const effect: EffectOutbox.OrchestrationEffectV2 = {
+      id: "effect:thread-lifecycle:re-engaged",
+      commandId: CommandId.make("command:thread-lifecycle:re-engaged"),
+      threadId,
+      request: {
+        type: "thread-lifecycle.run",
+        trigger: "thread.settled",
+        actionId: "cleanup",
+        actionName: "Cleanup preview",
+        command: "pnpm cleanup-preview",
+        cwd: "/workspace/feature-worktree",
+        projectRoot: "/workspace/project",
+        worktreePath: "/workspace/feature-worktree",
+      },
+      status: "running",
+      attemptCount: 1,
+      availableAt: now,
+      leaseOwner: "test-worker",
+      leaseExpiresAt: now,
+      createdAt: now,
+      updatedAt: now,
+      completedAt: null,
+      lastError: null,
+    };
+    const events = yield* Ref.make<ReadonlyArray<string>>([]);
+    const layer = layerExecutorFor({
+      events,
+      terminal: {
+        open: (input) => Ref.set(opened, input).pipe(Effect.as({} as never)),
+      },
+      threads: {
+        getThreadProjection: () =>
+          Effect.succeed({
+            thread: { id: threadId, settledOverride: "active" },
+          } as OrchestrationV2ThreadProjection),
+      },
+    });
+
+    yield* Effect.gen(function* () {
+      const executor = yield* EffectWorker.OrchestrationEffectExecutorV2;
+      yield* executor.execute(effect);
+    }).pipe(Effect.provide(layer));
+
+    assert.isNull(yield* Ref.get(opened));
+  }),
+);
+
+it.effect("skips a settlement action captured from a shared checkout", () =>
+  Effect.gen(function* () {
+    const now = DateTime.formatIso(yield* DateTime.now);
+    const opened = yield* Ref.make<
+      Parameters<TerminalManager.TerminalManager["Service"]["open"]>[0] | null
+    >(null);
+    const effect: EffectOutbox.OrchestrationEffectV2 = {
+      id: "effect:thread-lifecycle:shared-checkout",
+      commandId: CommandId.make("command:thread-lifecycle:shared-checkout"),
+      threadId,
+      request: {
+        type: "thread-lifecycle.run",
+        trigger: "thread.settled",
+        actionId: "cleanup",
+        actionName: "Cleanup preview",
+        command: "pnpm cleanup-preview",
+        cwd: "/workspace/project",
+        projectRoot: "/workspace/project",
+        worktreePath: null,
+      },
+      status: "running",
+      attemptCount: 1,
+      availableAt: now,
+      leaseOwner: "test-worker",
+      leaseExpiresAt: now,
+      createdAt: now,
+      updatedAt: now,
+      completedAt: null,
+      lastError: null,
+    };
+    const events = yield* Ref.make<ReadonlyArray<string>>([]);
+    const layer = layerExecutorFor({
+      events,
+      terminal: {
+        open: (input) => Ref.set(opened, input).pipe(Effect.as({} as never)),
+      },
+      threads: {
+        getThreadProjection: () =>
+          Effect.succeed({
+            thread: { id: threadId, settledOverride: "settled" },
+          } as OrchestrationV2ThreadProjection),
+      },
+    });
+
+    yield* Effect.gen(function* () {
+      const executor = yield* EffectWorker.OrchestrationEffectExecutorV2;
+      yield* executor.execute(effect);
+    }).pipe(Effect.provide(layer));
+
+    assert.isNull(yield* Ref.get(opened));
   }),
 );
 

@@ -13,6 +13,7 @@ import { discardComposerDraft } from "../lib/discardComposerDraft";
 import { requestCustomSnooze } from "./CustomSnoozeDialog";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/shared/threadPullRequests";
+import { fileBasename } from "@t3tools/shared/path";
 import { useAtomValue } from "@effect/atom-react";
 import * as Option from "effect/Option";
 import { Atom } from "effect/reactivity";
@@ -225,6 +226,7 @@ import {
   sidebarListItemId,
   sidebarMarkerId,
   sidebarThreadKeyAtY,
+  sidebarThreadActivityTimestamp,
   sortInboxThreadsByReturn,
   sortPinnedThreadsForSidebar,
   sortThreadsForSidebar,
@@ -3205,7 +3207,10 @@ export default function Sidebar() {
       toggleThreadSelection(threadKey);
       return;
     }
-    if (event.shiftKey) {
+    // Group headers change the visible row order, while the selection store
+    // intentionally retains the canonical ungrouped order. Do not turn a
+    // visible range into a different canonical range.
+    if (event.shiftKey && sidebarThreadGrouping === "none") {
       event.preventDefault();
       rangeSelectTo(threadKey, orderedThreadKeysRef.current);
       return;
@@ -3411,6 +3416,9 @@ export default function Sidebar() {
   });
   const startActionSweep = useStableCallback(
     (threadRef: ScopedThreadRef, action: SidebarSweepAction, event: PointerEvent) => {
+      // Sweep selection resolves against the canonical list, not the grouped
+      // DOM. A grouped sidebar must keep the single-row action behavior.
+      if (sidebarThreadGrouping !== "none") return;
       const originKey = scopedThreadKey(threadRef);
       const originSection = sectionByThreadKeyRef.current.get(originKey);
       const canApply = (key: string) => {
@@ -3476,8 +3484,9 @@ export default function Sidebar() {
           const project = projectByKey.get(`${thread.environmentId}:${thread.projectId}`);
           return project ? { title: project.title, workspaceRoot: project.workspaceRoot } : null;
         },
-        getWorkspaceLabel: (path) => path.split("/").filter(Boolean).at(-1) ?? path,
+        getWorkspaceLabel: (path) => fileBasename(path) || path,
         getStatus: (thread) => resolveSidebarThreadStatus(thread),
+        getActivityTimestamp: sidebarThreadActivityTimestamp,
       });
     return {
       active: group(activeThreads),

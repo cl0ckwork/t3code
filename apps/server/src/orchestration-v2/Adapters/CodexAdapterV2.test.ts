@@ -1508,6 +1508,32 @@ describe("CodexAdapterV2 skill mentions", () => {
       { missingSkillName: "review" },
     );
   });
+
+  it("only resolves selected skills from the requested workspace", () => {
+    const skill = {
+      name: "review",
+      path: "/other-workspace/.agents/skills/review/SKILL.md",
+      description: "Review",
+      enabled: true,
+      scope: "repo" as const,
+    };
+    assert.isUndefined(
+      CodexAdapterV2.codexSkillsForWorkspace(
+        [{ cwd: "/other-workspace", errors: [], skills: [skill] }],
+        "/workspace",
+      ),
+    );
+    assert.deepEqual(
+      CodexAdapterV2.codexSkillsForWorkspace(
+        [
+          { cwd: "/other-workspace", errors: [], skills: [skill] },
+          { cwd: "/workspace", errors: [], skills: [] },
+        ],
+        "/workspace",
+      ),
+      [],
+    );
+  });
 });
 
 describe("CodexAdapterV2 background command detail", () => {

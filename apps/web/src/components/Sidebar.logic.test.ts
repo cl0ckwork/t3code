@@ -31,6 +31,7 @@ import {
   resolveAdjacentThreadId,
   resolveProjectStatusIndicator,
   resolveSidebarSweepKeys,
+  sidebarThreadActivityTimestamp,
   resolveSidebarStageBadgeLabel,
   resolveSidebarThreadSection,
   resolveSidebarRowAccessibility,
@@ -203,6 +204,18 @@ describe("groupSidebarThreads", () => {
     });
 
     expect(result.map((entry) => entry.label)).toEqual(["recent", "old"]);
+  });
+});
+
+describe("sidebarThreadActivityTimestamp", () => {
+  it("uses the first valid activity timestamp rather than letting malformed data reorder groups", () => {
+    expect(
+      sidebarThreadActivityTimestamp({
+        latestUserMessageAt: "not-a-date",
+        updatedAt: "2026-10-19T12:00:00.000Z",
+        createdAt: "2026-10-19T11:00:00.000Z",
+      }),
+    ).toBe(Date.parse("2026-10-19T12:00:00.000Z"));
   });
 });
 

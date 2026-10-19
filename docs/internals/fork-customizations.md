@@ -67,20 +67,23 @@ The fork deliberately keeps only the parts upstream does not yet provide equival
 
 ### Required behavior
 
-- `.agents/skills` and provider-native workspace skills appear in the composer picker for the
-  selected project or worktree. Both `/` and `$` offer the same skill selection UI.
+- Provider-native workspace skills appear in the composer picker for the selected project or
+  worktree. Both `/` and `$` offer the same skill selection UI. Claude currently exposes its
+  native user and `.claude/skills` locations; do not claim `.agents/skills` support for Claude
+  without an execution bridge, because a picker entry alone would not load that skill at runtime.
 - A global snapshot contains global/user skills only. It must never expose repository skills from
   the server's launch directory to unrelated projects.
 - Workspace inventory is resolved from persisted server data: `thread.worktreePath` when present,
   otherwise `project.workspaceRoot`. The client never supplies an arbitrary filesystem path.
-- Precedence is `user/global < .agents/skills < .claude/skills`. A picker remains loading while a
-  workspace snapshot is being read, even if global skills are already available.
+- Provider-native discovery determines collision precedence. A picker remains loading while a
+  workspace snapshot is being read, even if global skills are already available; presentation
+  order must not disagree with the provider that executes the selected skill.
 - Codex turns with explicit selected skills re-resolve the names against the current workspace
   immediately before sending or steering. The resulting native `{ type: "skill", name, path }`
   input is attached to the Codex request; visible `$skill` text is not sufficient. A missing,
   stale, disabled, or timed-out skill blocks the dispatch.
-- Selected-skill metadata is persisted with the message so old chips still render after a skill is
-  renamed or deleted.
+- Historical chips currently resolve against live inventory. Do not promise them to survive a
+  rename or deletion until selected-skill metadata is made durable with the message.
 
 ### Implementation boundary
 
@@ -96,7 +99,9 @@ project, a deleted project or thread fails the refresh, and a forged path cannot
 to scan another directory. Provider adapters remain responsible for native structured skill input
 at dispatch time; visible `$skill` text alone is never an attachment contract. For Codex, the
 adapter calls `skills/list` with the runtime workspace and `forceReload: true`, then appends one
-native skill input for each unique selected skill to `turn/start` or `turn/steer`.
+native skill input for each unique selected skill to `turn/start` or `turn/steer`. When a workspace
+cwd was requested, Codex must return that exact workspace entry; never fall back to a same-named
+skill discovered for another cwd.
 
 Tests to preserve include forged paths, root/worktree selection, collisions, deletion, timeouts,
 and the Codex cwd/structured-skill attachment. Test the picker trigger/chip behavior separately.
@@ -123,10 +128,10 @@ from skills; do not consume or rewrite a real provider command because its name 
 
 ## Context and thread usage
 
-The composer meter is on by default through `usageMeterEnabled`. It distinguishes live native
-context occupancy from accounting that merely describes the most recent provider response. This is
-essential for Codex: its app server reports the latest request's token total and model window, but
-not the transcript size after automatic compaction.
+The upstream `contextWindowMeterEnabled` preference controls whether the composer meter is shown.
+When enabled, it distinguishes live native context occupancy from accounting that merely describes
+the most recent provider response. This is essential for Codex: its app server reports the latest
+request's token total and model window, but not the transcript size after automatic compaction.
 
 [`CodexAdapterV2.ts`](../../apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts) marks
 that report with `contextUsageAvailable: false`. The contract in
@@ -207,12 +212,12 @@ The trigger is stored in [`ProjectScript`](../../packages/contracts/src/project.
 from `t3.json`, and shows `on settle` in the actions list. More lifecycle events can use the same
 contract without adding another action type.
 
-The execution boundary is deliberately durable. [`Orchestrator.ts`](../../apps/server/src/orchestration-v2/Orchestrator.ts)
-captures the chosen action and `thread.worktreePath ?? project.workspaceRoot` in the outbox item
-that commits with the settlement event. [`EffectWorker.ts`](../../apps/server/src/orchestration-v2/EffectWorker.ts)
-starts the action in that captured workspace only after commit. Never accept a client cwd or
-re-resolve a later action configuration at execution time: cleanup must run once against the
-workspace and command the user actually settled.
+The execution boundary is deliberately durable and worktree-only. [`Orchestrator.ts`](../../apps/server/src/orchestration-v2/Orchestrator.ts)
+captures the chosen action and isolated worktree path in the outbox item that commits with the
+settlement event; root-checkout threads do not enqueue a generic lifecycle action. Before starting
+the action, [`EffectWorker.ts`](../../apps/server/src/orchestration-v2/EffectWorker.ts) re-reads
+the projection and no-ops when the thread has been re-engaged. Never accept a client cwd or
+re-resolve a later action configuration at execution time.
 
 The lifecycle effect is not replay-safe after process loss. Once the worker has started a shell,
 replaying could run external cleanup twice. A normal terminal-start failure remains retryable and

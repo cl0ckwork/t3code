@@ -1147,6 +1147,12 @@ export function firstValidTimestampMs(
   return 0;
 }
 
+export function sidebarThreadActivityTimestamp(
+  thread: Pick<SidebarThreadSummary, "latestUserMessageAt" | "updatedAt" | "createdAt">,
+): number {
+  return firstValidTimestampMs(thread.latestUserMessageAt, thread.updatedAt, thread.createdAt);
+}
+
 export { sortActiveThreadsByOrderKey as sortThreadsForSidebar } from "@t3tools/client-runtime/state/thread-sort";
 export {
   isThreadWorking as isSidebarThreadWorking,

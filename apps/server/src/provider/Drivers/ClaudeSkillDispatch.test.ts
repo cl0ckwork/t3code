@@ -78,4 +78,14 @@ describe("planClaudeSkillDispatch", () => {
       ).toBeUndefined();
     }
   });
+
+  it("leaves skill-looking text in Markdown code literal", () => {
+    expect(planClaudeSkillDispatch("`$review`", SKILLS)).toBeUndefined();
+    expect(planClaudeSkillDispatch("```sh\n$review\n```", SKILLS)).toBeUndefined();
+    expect(planClaudeSkillDispatch("```sh\n$review\n```\nthen $implement this", SKILLS)).toEqual({
+      leadingText: "```sh\n$review\n```\nthen",
+      commandText: "/implement this",
+      skillName: "implement",
+    });
+  });
 });

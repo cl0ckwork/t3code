@@ -3366,7 +3366,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     // must never execute cleanup twice.
     if (
       command.type === "thread.settle" &&
-      (thread.settledOverride !== "settled" || thread.settledAt === null)
+      (thread.settledOverride !== "settled" || thread.settledAt === null) &&
+      // A project root can be shared by active threads. Match the native
+      // settle cleanup policy: settlement hooks only run in an isolated
+      // worktree, never in the shared checkout.
+      thread.worktreePath !== null
     ) {
       const project = yield* projects.get(thread.projectId).pipe(mapDispatchError(command));
       if (Option.isSome(project) && project.value.deletedAt === null) {

@@ -3227,11 +3227,9 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           });
 
         const toCodexInput = (
-          turnInput: Pick<
-            | ProviderAdapter.ProviderAdapterV2TurnInput
-            | ProviderAdapter.ProviderAdapterV2SteerInput,
-            "message" | "runtimePolicy"
-          >,
+          turnInput:
+            | Pick<ProviderAdapter.ProviderAdapterV2TurnInput, "message" | "runtimePolicy">
+            | Pick<ProviderAdapter.ProviderAdapterV2SteerInput, "message">,
         ) =>
           Effect.gen(function* () {
             const inputItems: Array<CodexSchema.V2TurnStartParams__UserInput> = [];
@@ -3257,8 +3255,11 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               ...(yield* resolveSelectedCodexSkillInputs({
                 text: turnInput.message.text,
                 // Steer inputs inherit the session's workspace and do not
-                // always carry their own runtime policy.
-                cwd: turnInput.runtimePolicy?.cwd ?? input.runtimePolicy.cwd,
+                // carry their own runtime policy.
+                cwd:
+                  "runtimePolicy" in turnInput
+                    ? turnInput.runtimePolicy.cwd
+                    : input.runtimePolicy.cwd,
               })),
             );
             if (inputItems.length === 0) {

@@ -53,6 +53,7 @@ import {
   lazy,
   Suspense,
   type MouseEvent as ReactMouseEvent,
+  useCallback,
   useEffect,
   useEffectEvent,
   useLayoutEffect,
@@ -2092,8 +2093,8 @@ export function PullRequestDetailPanel({
                               refreshing
                                 ? "Refreshing pull request"
                                 : codeIsStale
-                                ? "More pull request actions; update available"
-                                : "More pull request actions"
+                                  ? "More pull request actions; update available"
+                                  : "More pull request actions"
                             }
                             size="icon-xs"
                             variant="ghost-muted"

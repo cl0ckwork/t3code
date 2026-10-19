@@ -96,6 +96,7 @@ import {
   memo,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useReducer,
   useRef,
   useState,
@@ -149,7 +150,7 @@ import { useTerminalFocus } from "../hooks/useTerminalFocus";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { registerSettleAndAdvance } from "../settleAndAdvance";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
-import { useClientSettings, useUpdateClientSettings } from "../hooks/useSettings";
+import { updateClientSettings, useClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
@@ -2721,7 +2722,6 @@ export default function Sidebar() {
   const sidebarProjectSortOrder = useClientSettings((s) => s.sidebarProjectSortOrder);
   const sidebarThreadGrouping = useClientSettings((s) => s.sidebarThreadGrouping);
   const sidebarThreadGroupOrder = useClientSettings((s) => s.sidebarThreadGroupOrder);
-  const updateClientSettings = useUpdateClientSettings();
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const {
@@ -3477,7 +3477,7 @@ export default function Sidebar() {
           return project ? { title: project.title, workspaceRoot: project.workspaceRoot } : null;
         },
         getWorkspaceLabel: (path) => path.split("/").filter(Boolean).at(-1) ?? path,
-        getStatus: ({ thread }) => resolveSidebarThreadStatus(thread),
+        getStatus: (thread) => resolveSidebarThreadStatus(thread),
       });
     return {
       active: group(activeThreads),

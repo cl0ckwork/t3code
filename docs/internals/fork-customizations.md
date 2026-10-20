@@ -113,7 +113,9 @@ Skills are structured inline selections, not text substitutions. The composer ac
 than one skill, and leaves subsequent text as ordinary prompt text. Picker labels use
 `Title Case (skill-name): description` so a human-readable name and canonical invocation are both
 visible. Markdown inline code and fenced code blocks are always literal, so snippets such as
-`$eq` cannot become skill selections or reach send-time skill validation.
+`$eq` cannot become skill selections or reach send-time skill validation. Upstream's rich editor
+now keeps fenced code literal by itself; the fork still owns inline code, trigger suppression
+inside code, `/skill` chips, and the same rule in Claude dispatch.
 
 The parsing and inline-token contract is shared in
 [`composerInlineTokens.ts`](../../packages/shared/src/composerInlineTokens.ts) and

@@ -244,7 +244,9 @@ The mechanism is intentionally local to the detail panel:
   list and detail use `poll: false`, retaining focus/visibility reads without an interval.
 - [`PullRequestDetailPanel.tsx`](../../apps/web/src/components/pullRequest/PullRequestDetailPanel.tsx)
   records that a new revision came from a background read, preserves the code tab, and owns the
-  stale indicator/toast lifecycle.
+  stale state and toast lifecycle. It passes `codeIsStale` to
+  [`PullRequestActionsMenu.tsx`](../../apps/web/src/components/pullRequest/PullRequestActionsMenu.tsx),
+  which renders the amber dot and the `Refresh — update available` label.
 
 Do not turn an automatic read into a code refresh. A stale toast is scoped to its PR and closes
 when the reader navigates away, so it cannot refresh a different PR later.

@@ -52,7 +52,6 @@ import { ArrowDownUpIcon, FolderIcon, ListFilterIcon, PlusIcon, SettingsIcon } f
 import {
   useEffect,
   useLayoutEffect,
-  useMemo,
   useReducer,
   useRef,
   useState,
@@ -1529,31 +1528,23 @@ export default function Sidebar() {
       });
     },
   );
-  const groupedThreadLists = useMemo(() => {
-    const group = (groupThreads: readonly EnvironmentThreadShell[]) =>
-      groupSidebarThreads({
-        grouping: sidebarThreadGrouping,
-        groupOrder: sidebarThreadGroupOrder,
-        threads: groupThreads,
-        getProject: (thread) => {
-          const project = projectByKey.get(`${thread.environmentId}:${thread.projectId}`);
-          return project ? { title: project.title, workspaceRoot: project.workspaceRoot } : null;
-        },
-        getWorkspaceLabel: (path) => fileBasename(path) || path,
-        getStatus: (thread) => resolveSidebarThreadStatus(thread),
-        getActivityTimestamp: sidebarThreadActivityTimestamp,
-      });
-    return {
-      active: group(activeThreads),
-      settled: group(renderedSettledThreads),
-    };
-  }, [
-    activeThreads,
-    projectByKey,
-    renderedSettledThreads,
-    sidebarThreadGrouping,
-    sidebarThreadGroupOrder,
-  ]);
+  const groupSidebarShelf = (groupThreads: readonly EnvironmentThreadShell[]) =>
+    groupSidebarThreads({
+      grouping: sidebarThreadGrouping,
+      groupOrder: sidebarThreadGroupOrder,
+      threads: groupThreads,
+      getProject: (thread) => {
+        const project = projectByKey.get(`${thread.environmentId}:${thread.projectId}`);
+        return project ? { title: project.title, workspaceRoot: project.workspaceRoot } : null;
+      },
+      getWorkspaceLabel: (path) => fileBasename(path) || path,
+      getStatus: (thread) => resolveSidebarThreadStatus(thread),
+      getActivityTimestamp: sidebarThreadActivityTimestamp,
+    });
+  const groupedThreadLists = {
+    active: groupSidebarShelf(activeThreads),
+    settled: groupSidebarShelf(renderedSettledThreads),
+  };
 
   // Release the hold during render once the server state catches up, so the
   // canonical order shows in the same frame instead of after an effect pass.
@@ -3106,7 +3097,7 @@ export default function Sidebar() {
                                 {group.label}
                               </span>
                               <span className="h-px flex-1 bg-sidebar-border/60" />
-                              <span className="text-[10px] tabular-nums text-sidebar-muted-foreground/60">
+                              <span className="text-3xs tabular-nums text-sidebar-muted-foreground/60">
                                 {group.threads.length}
                               </span>
                             </li>,

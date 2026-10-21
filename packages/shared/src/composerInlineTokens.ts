@@ -124,7 +124,7 @@ function collectMarkdownCodeRanges(text: string): ReadonlyArray<MarkdownCodeRang
     inlineRanges.push({ start: openInline.start, end: text.length, isUnclosed: true });
   }
 
-  return [...fencedRanges, ...inlineRanges].toSorted((left, right) => left.start - right.start);
+  return [...fencedRanges, ...inlineRanges].sort((left, right) => left.start - right.start);
 }
 
 function rangeOverlapsMarkdownCode(

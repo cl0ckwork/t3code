@@ -3258,40 +3258,38 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           },
         );
 
-        const resolveSelectedCodexSkillInputs = (input: {
-          readonly text: string;
-          readonly cwd: string | null;
-        }) =>
-          Effect.gen(function* () {
-            if (selectedCodexSkillNames(input.text).length === 0) {
-              return [];
-            }
-            const response = yield* client
-              .request("skills/list", {
-                ...(input.cwd === null ? {} : { cwds: [input.cwd] }),
-                // A picker result may be stale by the time the user sends. A
-                // native skill input has to reference a skill Codex can read now.
-                forceReload: true,
-              })
-              .pipe(
-                Effect.mapError((cause) =>
-                  toProtocolError("Failed to resolve the selected Codex skill.", cause),
-                ),
-              );
-            const skills = codexSkillsForWorkspace(response.data, input.cwd);
-            if (skills === undefined) {
-              return yield* toProtocolError(
-                "Could not resolve the selected Codex skill for this workspace. Refresh the picker and try again.",
-              );
-            }
-            const resolved = resolveCodexSkillInputs({ text: input.text, skills });
-            if ("missingSkillName" in resolved) {
-              return yield* toProtocolError(
-                `Skill '$${resolved.missingSkillName}' is no longer available in this workspace. Refresh the picker and try again.`,
-              );
-            }
-            return resolved.inputs;
-          });
+        const resolveSelectedCodexSkillInputs = Effect.fn(
+          "CodexAdapterV2.resolveSelectedSkillInputs",
+        )(function* (input: { readonly text: string; readonly cwd: string | null }) {
+          if (selectedCodexSkillNames(input.text).length === 0) {
+            return [];
+          }
+          const response = yield* client
+            .request("skills/list", {
+              ...(input.cwd === null ? {} : { cwds: [input.cwd] }),
+              // A picker result may be stale by the time the user sends. A
+              // native skill input has to reference a skill Codex can read now.
+              forceReload: true,
+            })
+            .pipe(
+              Effect.mapError((cause) =>
+                toProtocolError("Failed to resolve the selected Codex skill.", cause),
+              ),
+            );
+          const skills = codexSkillsForWorkspace(response.data, input.cwd);
+          if (skills === undefined) {
+            return yield* toProtocolError(
+              "Could not resolve the selected Codex skill for this workspace. Refresh the picker and try again.",
+            );
+          }
+          const resolved = resolveCodexSkillInputs({ text: input.text, skills });
+          if ("missingSkillName" in resolved) {
+            return yield* toProtocolError(
+              `Skill '$${resolved.missingSkillName}' is no longer available in this workspace. Refresh the picker and try again.`,
+            );
+          }
+          return resolved.inputs;
+        });
 
         const toCodexInput = Effect.fn("CodexAdapterV2.toCodexInput")(function* (
           turnInput:

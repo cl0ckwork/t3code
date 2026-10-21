@@ -153,7 +153,7 @@ export function PullRequestActionsMenu({
                   {codeIsStale ? (
                     <span
                       aria-hidden
-                      className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-amber-400 ring-1 ring-background"
+                      className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-warning ring-1 ring-background"
                     />
                   ) : null}
                 </Button>

@@ -38,12 +38,10 @@ import {
 import {
   createContext,
   use,
-  useCallback,
   useEffect,
   useEffectEvent,
   useImperativeHandle,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -981,28 +979,17 @@ function ComposerPromptEditorTiptapInner(
     restoreFocusRef,
   } = props;
   const richText = !literalText && (richTextEnabled ?? false);
-  const clampEditorCursor = useCallback(
-    (text: string, position: number) =>
-      literalText
-        ? Math.max(
-            0,
-            Math.min(text.length, Number.isFinite(position) ? Math.floor(position) : text.length),
-          )
-        : clampCollapsedComposerCursor(text, position),
-    [literalText],
-  );
-  const expandEditorCursor = useCallback(
-    (text: string, position: number) =>
-      literalText ? position : expandCollapsedComposerCursor(text, position),
-    [literalText],
-  );
-  const knownSlashSkillNames = useMemo(
-    () =>
-      !literalText && renderSlashSkillChips
-        ? new Set(skills.map((skill) => skill.name))
-        : undefined,
-    [literalText, renderSlashSkillChips, skills],
-  );
+  const clampEditorCursor = (text: string, position: number) =>
+    literalText
+      ? Math.max(
+          0,
+          Math.min(text.length, Number.isFinite(position) ? Math.floor(position) : text.length),
+        )
+      : clampCollapsedComposerCursor(text, position);
+  const expandEditorCursor = (text: string, position: number) =>
+    literalText ? position : expandCollapsedComposerCursor(text, position);
+  const knownSlashSkillNames =
+    !literalText && renderSlashSkillChips ? new Set(skills.map((skill) => skill.name)) : undefined;
   const slashSkillSignature =
     !literalText && renderSlashSkillChips ? skills.map((skill) => skill.name).join("\u001f") : "";
 

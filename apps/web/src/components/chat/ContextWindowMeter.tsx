@@ -49,7 +49,7 @@ export function ContextWindowMeter(props: {
           <Button
             size={hasLiveContextUsage ? "icon-sm" : "compact"}
             variant="ghost-muted"
-            className={hasLiveContextUsage ? "size-7" : "h-7 gap-1 px-2"}
+            {...(hasLiveContextUsage ? { className: "size-7" } : {})}
             aria-label={
               hasLiveContextUsage && usage.maxTokens !== null && usedPercentage
                 ? `Context window ${usedPercentage} used`

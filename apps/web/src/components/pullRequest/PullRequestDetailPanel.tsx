@@ -36,7 +36,6 @@ import {
 import {
   lazy,
   Suspense,
-  useCallback,
   useEffect,
   useEffectEvent,
   useLayoutEffect,
@@ -531,24 +530,27 @@ export function PullRequestDetailPanel({
   } | null>(null);
   const codeIsStale = staleCodeRevision?.key === tabScopeKey;
   const staleToastRevisionRef = useRef<string | null>(null);
-  const staleToastIdRef = useRef<ReturnType<typeof toastManager.add> | null>(null);
+  const staleToastRef = useRef<{
+    readonly id: ReturnType<typeof toastManager.add>;
+    readonly key: string;
+  } | null>(null);
   const backgroundRefreshKeyRef = useRef<string | null>(null);
-  const clearStaleCodeRevision = useCallback(() => {
-    setStaleCodeRevision((current) => (current?.key === tabScopeKey ? null : current));
+  const closeStaleToast = () => {
+    if (staleToastRef.current !== null) toastManager.close(staleToastRef.current.id);
+    staleToastRef.current = null;
     staleToastRevisionRef.current = null;
-    if (staleToastIdRef.current !== null) {
-      toastManager.close(staleToastIdRef.current);
-      staleToastIdRef.current = null;
-    }
-  }, [tabScopeKey]);
+  };
+  const clearStaleCodeRevision = () => {
+    setStaleCodeRevision((current) => (current?.key === tabScopeKey ? null : current));
+    closeStaleToast();
+  };
   // A stale toast belongs to the pull request that produced it. Do not leave an action around
   // that can refresh a pull request the reader has already navigated away from.
   useEffect(
     () => () => {
-      if (staleToastIdRef.current !== null) {
-        toastManager.close(staleToastIdRef.current);
-        staleToastIdRef.current = null;
-      }
+      if (staleToastRef.current?.key !== tabScopeKey) return;
+      toastManager.close(staleToastRef.current.id);
+      staleToastRef.current = null;
       staleToastRevisionRef.current = null;
     },
     [tabScopeKey],
@@ -581,14 +583,15 @@ export function PullRequestDetailPanel({
           children: "Refresh",
           onClick: () => {
             toastManager.close(toastId);
-            staleToastIdRef.current = null;
+            staleToastRef.current = null;
             void refreshFromHost();
           },
         },
       });
-      staleToastIdRef.current = toastId;
+      staleToastRef.current = { id: toastId, key: revision.key };
     },
   );
+  const revalidateActivity = useEffectEvent(() => activityQuery.refresh());
   const activityRevision = useRef<{ readonly key: string; readonly updatedAt: string } | null>(
     null,
   );
@@ -605,10 +608,10 @@ export function PullRequestDetailPanel({
       // Let an existing read settle before revalidating the new revision. Interrupting a
       // mutation's activity refresh can leave SWR displaying its previous value.
       if (activityQuery.isPending) return;
-      activityQuery.refresh();
+      revalidateActivity();
     }
     activityRevision.current = next;
-  }, [activityQuery.isPending, activityQuery.refresh, coreDetail, tabScopeKey]);
+  }, [activityQuery.isPending, coreDetail, tabScopeKey]);
   useEffect(() => {
     if (!detailQuery.isPending) backgroundRefreshKeyRef.current = null;
   }, [detailQuery.isPending]);

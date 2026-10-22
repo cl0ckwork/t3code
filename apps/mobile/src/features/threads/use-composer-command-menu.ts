@@ -329,7 +329,8 @@ export function useComposerCommandMenu({
       input: {
         instanceId: selectedProviderInstanceId,
         projectId: workspaceProjectId,
-        ...(currentThreadId === null ? {} : { threadId: currentThreadId }),
+        // A draft's id is not a persisted thread yet; the server would reject it.
+        ...(currentThreadId === null || !hasThread ? {} : { threadId: currentThreadId }),
       },
     }).then((result) => {
       const refreshed =
@@ -348,6 +349,7 @@ export function useComposerCommandMenu({
     projectCwd,
     workspaceProjectId,
     currentThreadId,
+    hasThread,
     refreshProviders,
     selectedProviderInstanceId,
     selectedProviderStatus,

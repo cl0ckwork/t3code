@@ -48,7 +48,14 @@ import {
 } from "@t3tools/contracts";
 
 import { fileBasename } from "@t3tools/shared/path";
-import { ArrowDownUpIcon, FolderIcon, ListFilterIcon, PlusIcon, SettingsIcon } from "lucide-react";
+import {
+  ArrowDownUpIcon,
+  FolderIcon,
+  ListFilterIcon,
+  ListTreeIcon,
+  PlusIcon,
+  SettingsIcon,
+} from "lucide-react";
 import {
   useEffect,
   useLayoutEffect,
@@ -2814,7 +2821,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                     <MenuTrigger
                       render={<SidebarHeaderIconButton label="Group sidebar sessions" />}
                     >
-                      <ListFilterIcon />
+                      <ListTreeIcon />
                     </MenuTrigger>
                     <MenuPopup align="end" className="min-w-44">
                       <MenuRadioGroup

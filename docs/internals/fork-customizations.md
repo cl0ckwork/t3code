@@ -148,21 +148,6 @@ excludes estimate-only reports from history handoff and model-switch calculation
 compact banner appears only for live context telemetry. The useful invariant is: no UI or
 orchestration decision may imply that a last-response token count is the current native context.
 
-## Thread titles
-
-Thread titles use the project's existing naming language rather than free-form summaries. The
-required form is `kind:slug`, for example `work:fix-workspace-skill-picker` or
-`spec:DAT-303/retailer-link-gtin-data`. The generator receives recent titles from the same project
-as context, plus linked source-control context when it exists. It titles the durable user goal,
-not incidental operations such as a plan, test, branch, CI run, or merge.
-
-The prompt contract is in
-[`TextGenerationPrompts.ts`](../../apps/server/src/textGeneration/TextGenerationPrompts.ts), and
-[`ProviderCommandReactor.ts`](../../apps/server/src/orchestration/Layers/ProviderCommandReactor.ts)
-collects project-scoped title context before generation. Keep the initial-title and regeneration
-rules aligned. The important regression is a thread changing title to its latest operational
-follow-up instead of retaining its original durable subject.
-
 ## Sidebar grouping and ordering
 
 The sidebar exposes grouping and ordering controls beside the project scope control. Grouping is a

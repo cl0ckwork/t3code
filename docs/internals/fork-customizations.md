@@ -236,6 +236,16 @@ The mechanism is intentionally local to the detail panel:
 Do not turn an automatic read into a code refresh. A stale toast is scoped to its PR and closes
 when the reader navigates away, so it cannot refresh a different PR later.
 
+## Agent orchestration instructions
+
+[`orchestrationInstructions.ts`](../../packages/provider-core/src/server/orchestrationInstructions.ts)
+adds two lines to upstream's injected agent instructions. Upstream tells agents that ordinary
+coding needs no T3 tools and shows visuals only when asked. The fork also tells agents to use T3
+tools when they are the product-native way to do the work or help the user decide, and to show a
+chart, table, diagram, pseudocode, or mockup unasked when it says more than prose. Keep each
+section below Codex's 4,000-byte entry limit. Drop these lines if upstream adopts equivalent
+proactive guidance.
+
 ## Daily desktop launcher
 
 `vp run desktop:daily` is a production-style local launcher for this fork. It builds the desktop

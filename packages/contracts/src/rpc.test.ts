@@ -5,12 +5,13 @@ import * as Schema from "effect/Schema";
 import { ORCHESTRATION_V2_WS_METHODS } from "./orchestrationV2.ts";
 import { WS_METHODS, WsRpcGroup } from "./rpc.ts";
 
+const refreshProvidersRpc = WsRpcGroup.requests.get(WS_METHODS.serverRefreshProviders);
+if (refreshProvidersRpc === undefined) throw new Error("server.refreshProviders is not registered");
+const decodeRefreshProvidersPayload = Schema.decodeSync(refreshProvidersRpc.payloadSchema);
+
 describe("WebSocket RPC contracts", () => {
   it("does not carry a client filesystem path into provider workspace refreshes", () => {
-    const refresh = WsRpcGroup.requests.get(WS_METHODS.serverRefreshProviders);
-    if (refresh === undefined) throw new Error("server.refreshProviders is not registered");
-
-    const decoded = Schema.decodeSync(refresh.payloadSchema)({
+    const decoded = decodeRefreshProvidersPayload({
       instanceId: "codex",
       projectId: "project-1",
       threadId: "thread-1",

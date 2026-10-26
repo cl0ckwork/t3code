@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { formatDiffCount } from "@t3tools/client-runtime/diff-count";
 
 import { countReviewCommentContexts, parseReviewInlineComments } from "./reviewCommentSelection";
@@ -126,9 +126,7 @@ export function useReviewDiffData(input: {
   readonly threadKey: string | null;
   readonly threadId: ThreadId;
   readonly environmentId: EnvironmentId | undefined;
-  readonly cwd: string | null;
   readonly selectedSection: ReviewSectionItem | null;
-  readonly revision: string | undefined;
   readonly draftMessage: string;
 }) {
   const { draftMessage, selectedSection, threadKey, threadId } = input;
@@ -149,10 +147,10 @@ export function useReviewDiffData(input: {
     [lazySource, selectedSection?.diff, selectedSection?.id, threadKey],
   );
   const registry = useContext(RegistryContext);
-  const { environmentId, cwd } = input;
+  const { environmentId } = input;
   const scope = JSON.stringify([
     environmentId,
-    cwd,
+    threadId,
     source?.kind,
     source?.baseRef,
     source?.diffHash,
@@ -172,6 +170,8 @@ export function useReviewDiffData(input: {
                   environmentId,
                   input: {
                     cacheKey: scope,
+                    // Newer preview revisions refresh patches read under an older one.
+                    preview: { threadId },
                     request: {
                       threadId,
                       ...(lazySource.baseRef ? { baseRef: lazySource.baseRef } : {}),
@@ -205,24 +205,6 @@ export function useReviewDiffData(input: {
       [queries, parsedQuery],
     ),
   );
-  const previousPreview = useRef({
-    scope,
-    revision: input.revision,
-    queries: [] as typeof queries,
-  });
-  useEffect(() => {
-    const previous = previousPreview.current;
-    previousPreview.current = { scope, revision: input.revision, queries };
-    for (const query of queries) {
-      if (!query) continue;
-      const changed = previous.scope === scope && previous.revision !== input.revision;
-      const cached =
-        !previous.queries.includes(query) &&
-        registry.get(query)._tag !== "Initial" &&
-        !registry.get(query).waiting;
-      if (changed || cached) registry.refresh(query);
-    }
-  }, [input.revision, queries, registry, scope]);
   const loadVisibleFile = useCallback(
     (fileId: string | null, retry = false) => {
       const index =

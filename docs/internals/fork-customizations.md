@@ -93,6 +93,10 @@ identifies the provider instance plus its persisted project and optional thread;
 before it calls the registry. `cwd` is deliberately not part of the RPC contract. The registry
 then caches the provider-specific result by instance and resolved workspace path, while the
 composer renders the matching workspace snapshot through the shared `providerSkills` helpers.
+Upstream's shared refresh atom family in
+[`providerSkills.ts`](../../packages/client-runtime/src/providerSkills.ts) is keyed by project and
+thread here, and an on-demand refresh reply carries only the snapshot for the server-resolved path;
+the client records it under that reply's `cwd`, never a path it sent.
 
 This is a trust boundary, not a client-side convenience. A thread must belong to the supplied
 project, a deleted project or thread fails the refresh, and a forged path cannot cause the server
@@ -220,7 +224,7 @@ detail panel.
 
 A background detail read may update lightweight PR metadata. If it observes a newer revision, it
 does **not** replace the code review; it marks the actions menu with an amber dot and shows one
-toast with an explicit Refresh action. The menu also says `Refresh — update available`. Only that
+toast with an explicit Refresh action. The menu also says `Refresh (update available)`. Only that
 explicit refresh invalidates the host cache and increments the code refresh token.
 
 The mechanism is intentionally local to the detail panel:
@@ -231,7 +235,7 @@ The mechanism is intentionally local to the detail panel:
   records that a new revision came from a background read, preserves the code tab, and owns the
   stale state and toast lifecycle. It passes `codeIsStale` to
   [`PullRequestActionsMenu.tsx`](../../apps/web/src/components/pullRequest/PullRequestActionsMenu.tsx),
-  which renders the amber dot and the `Refresh — update available` label.
+  which renders the amber dot and the `Refresh (update available)` label.
 
 Do not turn an automatic read into a code refresh. A stale toast is scoped to its PR and closes
 when the reader navigates away, so it cannot refresh a different PR later.

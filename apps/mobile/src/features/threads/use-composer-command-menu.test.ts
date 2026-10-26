@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   EnvironmentId,
   ProjectId,
@@ -9,13 +9,16 @@ import {
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
-const refreshProviders = vi.hoisted(() => vi.fn());
-const workspaceProviderSkills = vi.hoisted(() => ({ current: true }));
+const workspaceRefresh = vi.hoisted(() => ({
+  run: vi.fn(),
+  supportsWorkspaceProviderSkills: true,
+}));
 vi.mock("react-native", () => ({ Alert: { alert: vi.fn() } }));
 
 vi.mock("../../state/queries", () => ({
   useComposerPathSearch: () => ({ entries: [], isPending: false }),
   useComposerPullRequestSearch: () => ({ entries: [], isPending: false, error: null }),
+  useThreadSearch: () => undefined,
 }));
 vi.mock("../../state/use-composer-drafts", () => ({
   getComposerDraftSnapshot: vi.fn(),
@@ -23,20 +26,22 @@ vi.mock("../../state/use-composer-drafts", () => ({
   setComposerDraftContext: vi.fn(),
 }));
 vi.mock("../../lib/uuid", () => ({ uuidv4: () => "context-id" }));
-vi.mock("../../state/server", () => ({
-  serverEnvironment: {
-    refreshProviders: Symbol("refreshProviders"),
-    configValueAtom: () => Symbol("serverConfig"),
-  },
-}));
-vi.mock("@effect/atom-react", () => ({
-  useAtomValue: () => ({
-    environment: { capabilities: { workspaceProviderSkills: workspaceProviderSkills.current } },
-  }),
-}));
-vi.mock("../../state/use-atom-command", () => ({
-  useAtomCommand: () => refreshProviders,
-}));
+vi.mock("../../state/server", async () => {
+  const { Atom } = await import("effect/reactivity");
+  const providers = Atom.make(null);
+  const config = (workspaceProviderSkills: boolean) =>
+    Atom.make({ environment: { capabilities: { workspaceProviderSkills } } });
+  const supported = config(true);
+  const unsupported = config(false);
+  return {
+    serverEnvironment: {
+      providersValueAtom: () => providers,
+      configValueAtom: () =>
+        workspaceRefresh.supportsWorkspaceProviderSkills ? supported : unsupported,
+      refreshProviders: { label: "refresh", run: workspaceRefresh.run },
+    },
+  };
+});
 
 import {
   buildComposerSlashCommandItems,
@@ -110,10 +115,11 @@ describe("mobile slash commands", () => {
   });
 });
 
-describe("workspace command discovery retry", () => {
+describe("workspace skill discovery", () => {
   let root: Root;
   const environmentId = EnvironmentId.make("test-environment");
   const instanceId = ProviderInstanceId.make("claude");
+  const projectId = ProjectId.make("project-1");
   const provider = {
     instanceId,
     driver: ProviderDriverKind.make("claude"),
@@ -126,25 +132,16 @@ describe("workspace command discovery retry", () => {
     models: [],
     slashCommands: [],
     skills: [],
-    workspaceSnapshots: [
-      {
-        cwd: "/project-a",
-        checkedAt: "2026-01-01T00:00:00.000Z",
-        slashCommandsPending: true,
-        slashCommands: [{ name: "compact" }],
-        skills: [],
-      },
-    ],
   } satisfies ServerProvider;
 
-  function Probe({ cwd, status = provider }: { cwd: string; status?: ServerProvider }) {
+  function Probe() {
     useComposerCommandMenu({
       draftMessage: "/project",
       ownerKey: null,
       environmentId,
-      projectCwd: cwd,
-      workspaceProjectId: ProjectId.make("project-1"),
-      selectedProviderStatus: status,
+      projectCwd: "/project-a",
+      workspaceProjectId: projectId,
+      selectedProviderStatus: provider,
       hasThread: false,
       hasCompactableConversation: false,
       onChangeDraftMessage: () => {},
@@ -152,11 +149,10 @@ describe("workspace command discovery retry", () => {
     return null;
   }
 
-  beforeEach(() => {
-    vi.useFakeTimers();
-    workspaceProviderSkills.current = true;
-    refreshProviders.mockReset();
-    refreshProviders.mockResolvedValue({ _tag: "Success", value: { providers: [provider] } });
+  function setup(supportsWorkspaceProviderSkills: boolean) {
+    workspaceRefresh.supportsWorkspaceProviderSkills = supportsWorkspaceProviderSkills;
+    workspaceRefresh.run.mockReset();
+    workspaceRefresh.run.mockReturnValue(new Promise(() => {}));
     const document = { nodeType: 9, addEventListener() {}, removeEventListener() {} };
     const container = {
       nodeType: 1,
@@ -170,162 +166,33 @@ describe("workspace command discovery retry", () => {
     vi.stubGlobal("window", { document, HTMLIFrameElement: EventTarget });
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     root = createRoot(container as unknown as HTMLElement);
-  });
+  }
 
   afterEach(async () => {
     await act(async () => {
       root.unmount();
     });
-    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
-  it("retries partial commands after the cooldown without editing the draft", async () => {
-    const recovered = {
-      ...provider,
-      workspaceSnapshots: [{ ...provider.workspaceSnapshots[0], slashCommandsPending: false }],
-    };
-    refreshProviders.mockResolvedValueOnce({ _tag: "Success", value: { providers: [provider] } });
-    refreshProviders.mockResolvedValue({ _tag: "Success", value: { providers: [recovered] } });
+  it("asks the host to resolve the project workspace instead of sending a path", async () => {
+    setup(true);
     await act(async () => {
-      root.render(createElement(Probe, { cwd: "/project-a" }));
+      root.render(createElement(Probe));
     });
-    expect(refreshProviders).toHaveBeenCalledTimes(1);
-    await act(() => vi.advanceTimersByTimeAsync(9_999));
-    expect(refreshProviders).toHaveBeenCalledTimes(1);
-    await act(() => vi.advanceTimersByTimeAsync(1));
-    expect(refreshProviders).toHaveBeenCalledTimes(2);
-    expect(refreshProviders).toHaveBeenLastCalledWith({
+    expect(workspaceRefresh.run).toHaveBeenCalledTimes(1);
+    // A draft's id is not a persisted thread, so no threadId is sent.
+    expect(workspaceRefresh.run).toHaveBeenCalledWith(expect.anything(), {
       environmentId,
-      input: { instanceId, projectId: ProjectId.make("project-1") },
+      input: { instanceId, projectId },
     });
-    await act(() => vi.advanceTimersByTimeAsync(20_000));
-    expect(refreshProviders).toHaveBeenCalledTimes(2);
-  });
-
-  it.each(["pi", "acpRegistry"])(
-    "does not poll a healthy %s workspace without discovery",
-    async (driver) => {
-      const unsupported = {
-        ...provider,
-        driver: ProviderDriverKind.make(driver),
-        workspaceSnapshots: [],
-      };
-      refreshProviders.mockResolvedValue({ _tag: "Success", value: { providers: [unsupported] } });
-      await act(async () => {
-        root.render(createElement(Probe, { cwd: "/project-a", status: unsupported }));
-      });
-      expect(refreshProviders).toHaveBeenCalledTimes(1);
-      await act(() => vi.advanceTimersByTimeAsync(30_000));
-      expect(refreshProviders).toHaveBeenCalledTimes(1);
-      expect(vi.getTimerCount()).toBe(0);
-    },
-  );
-
-  it("arms the remaining cooldown when a concurrent scan publishes partial commands", async () => {
-    const missing = { ...provider, workspaceSnapshots: [] };
-    const recovered = {
-      ...provider,
-      workspaceSnapshots: provider.workspaceSnapshots.map((snapshot) => ({
-        ...snapshot,
-        slashCommandsPending: false,
-      })),
-    };
-    refreshProviders.mockResolvedValueOnce({ _tag: "Success", value: { providers: [missing] } });
-    refreshProviders.mockResolvedValue({ _tag: "Success", value: { providers: [recovered] } });
-    await act(async () => {
-      root.render(createElement(Probe, { cwd: "/project-a", status: missing }));
-    });
-    await act(() => vi.advanceTimersByTimeAsync(5_000));
-    expect(refreshProviders).toHaveBeenCalledTimes(1);
-    expect(vi.getTimerCount()).toBe(0);
-    await act(async () => {
-      root.render(createElement(Probe, { cwd: "/project-a", status: provider }));
-    });
-    await act(() => vi.advanceTimersByTimeAsync(4_999));
-    expect(refreshProviders).toHaveBeenCalledTimes(1);
-    await act(() => vi.advanceTimersByTimeAsync(1));
-    expect(refreshProviders).toHaveBeenCalledTimes(2);
-    await act(() => vi.advanceTimersByTimeAsync(20_000));
-    expect(refreshProviders).toHaveBeenCalledTimes(2);
-  });
-
-  it("does not retry when a concurrent scan publishes a complete workspace", async () => {
-    const missing = { ...provider, workspaceSnapshots: [] };
-    const recovered = {
-      ...provider,
-      workspaceSnapshots: provider.workspaceSnapshots.map((snapshot) => ({
-        ...snapshot,
-        slashCommandsPending: false,
-      })),
-    };
-    refreshProviders.mockResolvedValue({ _tag: "Success", value: { providers: [missing] } });
-    await act(async () => {
-      root.render(createElement(Probe, { cwd: "/project-a", status: missing }));
-    });
-    await act(() => vi.advanceTimersByTimeAsync(5_000));
-    await act(async () => {
-      root.render(createElement(Probe, { cwd: "/project-a", status: recovered }));
-    });
-    await act(() => vi.advanceTimersByTimeAsync(30_000));
-    expect(refreshProviders).toHaveBeenCalledTimes(1);
-    expect(vi.getTimerCount()).toBe(0);
-  });
-
-  it("retries a rejected refresh while published discovery remains pending", async () => {
-    const recovered = {
-      ...provider,
-      workspaceSnapshots: provider.workspaceSnapshots.map((snapshot) => ({
-        ...snapshot,
-        slashCommandsPending: false,
-      })),
-    };
-    refreshProviders.mockRejectedValueOnce(new Error("Connection lost"));
-    refreshProviders.mockResolvedValue({ _tag: "Success", value: { providers: [recovered] } });
-    await act(async () => {
-      root.render(createElement(Probe, { cwd: "/project-a" }));
-    });
-    await act(() => vi.advanceTimersByTimeAsync(10_000));
-    expect(refreshProviders).toHaveBeenCalledTimes(2);
-    await act(() => vi.advanceTimersByTimeAsync(20_000));
-    expect(refreshProviders).toHaveBeenCalledTimes(2);
-  });
-
-  it("cancels the old workspace retry and does not duplicate an in-flight request", async () => {
-    await act(async () => {
-      root.render(createElement(Probe, { cwd: "/project-a" }));
-    });
-    refreshProviders.mockImplementationOnce(() => new Promise(() => {}));
-    await act(async () => {
-      root.render(createElement(Probe, { cwd: "/project-b" }));
-    });
-    expect(refreshProviders).toHaveBeenCalledTimes(2);
-    await act(() => vi.advanceTimersByTimeAsync(20_000));
-    expect(refreshProviders).toHaveBeenCalledTimes(2);
-    expect(refreshProviders).toHaveBeenLastCalledWith({
-      environmentId,
-      input: { instanceId, projectId: ProjectId.make("project-1") },
-    });
-    expect(vi.getTimerCount()).toBe(0);
-  });
-
-  it("cancels a scheduled retry when the composer unmounts", async () => {
-    await act(async () => {
-      root.render(createElement(Probe, { cwd: "/project-a" }));
-    });
-    await act(async () => {
-      root.unmount();
-    });
-    await act(() => vi.advanceTimersByTimeAsync(20_000));
-    expect(refreshProviders).toHaveBeenCalledTimes(1);
-    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("does not send a workspace refresh to a host without the capability", async () => {
-    workspaceProviderSkills.current = false;
+    setup(false);
     await act(async () => {
-      root.render(createElement(Probe, { cwd: "/project-a" }));
+      root.render(createElement(Probe));
     });
-    expect(refreshProviders).not.toHaveBeenCalled();
+    expect(workspaceRefresh.run).not.toHaveBeenCalled();
   });
 });

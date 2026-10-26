@@ -187,7 +187,7 @@ export function PullRequestActionsMenu({
         />
         <MenuItem disabled={refreshing} onClick={() => void refreshFromHost()}>
           <RefreshIcon size="sm" refreshing={refreshing} />
-          {codeIsStale ? "Refresh — update available" : "Refresh"}
+          {codeIsStale ? "Refresh (update available)" : "Refresh"}
         </MenuItem>
         <MenuItem disabled={handoff !== null} onClick={askAboutPullRequest}>
           <MessageCircleQuestionIcon className="mt-1 size-3.5 shrink-0 self-start" />

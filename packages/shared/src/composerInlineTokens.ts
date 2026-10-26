@@ -45,13 +45,8 @@ function lineEndAfter(text: string, start: number): number {
   return newline === -1 ? text.length : newline + 1;
 }
 
-/**
- * Returns Markdown source ranges where composer syntax is literal code rather
- * than an instruction. The composer intentionally uses lightweight source
- * parsing here: it runs on every draft update, while a full Markdown parser
- * would be both heavier and would not preserve the exact source ranges needed
- * by inline chips.
- */
+// Source ranges where composer syntax is literal code. A full Markdown parser would be heavier
+// on every draft update and would not keep the exact source ranges inline chips need.
 function collectMarkdownCodeRanges(text: string): ReadonlyArray<MarkdownCodeRange> {
   const fencedRanges: MarkdownCodeRange[] = [];
   let lineStart = 0;
@@ -144,13 +139,8 @@ export function isComposerMarkdownCodePosition(text: string, position: number): 
   );
 }
 
-/**
- * A skill name may start with a digit, but compact monetary amounts and
- * numeric expressions like "$20", "$20k", "$100M", and "$1e6" must stay prose:
- * the composer chips any matched `$name` token, known or not. Tokens beginning
- * with digits must not match numbers with currency/exponent suffixes, and must
- * contain at least one letter. Any currency symbol is accepted as the sigil.
- */
+// Amounts such as "$20", "$20k", "$100M", and "$1e6" stay prose, because any matched `$name`
+// becomes a chip. A token needs a letter; any currency symbol is accepted as the sigil.
 const SKILL_MENTION_SOURCE =
   /(^|\s)\p{Sc}(?![0-9][0-9_]*(?:[kKmMbBtT]|[eE][0-9]+)?(?:\s|$))(?=[a-zA-Z0-9:_-]*[a-zA-Z])([a-zA-Z0-9][a-zA-Z0-9:_-]*)/u
     .source;

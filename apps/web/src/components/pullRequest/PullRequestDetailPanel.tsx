@@ -1,4 +1,5 @@
 import { projectChangeRequestUrl } from "@t3tools/client-runtime/change-request-links";
+import { normalizeThreadPullRequestKey } from "@t3tools/client-runtime/thread-pull-requests";
 import { changeRequestReferenceAutolinker } from "@t3tools/client-runtime/pull-request-markdown";
 import { useAtomValue } from "@effect/atom-react";
 import { usePullRequestStack } from "~/state/usePullRequestStack";
@@ -315,6 +316,22 @@ export function PullRequestDetailPanel({
     listEntry.number === reference.number
       ? listEntry
       : null;
+  const linkedReference = sourceControlClients.parseChangeRequestUrl(
+    matchingListEntry?.url ?? unavailableHostUrl ?? "",
+  )?.link;
+  useEnvironmentQuery(
+    context === "page" &&
+      supportsThreadPullRequests &&
+      linkedReference &&
+      (reference.host === undefined ||
+        reference.host.toLowerCase() === linkedReference.host.toLowerCase())
+      ? pullRequestEnvironment.linkedThreads({
+          environmentId,
+          input: { ...reference, ...normalizeThreadPullRequestKey(linkedReference) },
+        })
+      : null,
+  );
+  useEnvironmentQuery(pullRequestEnvironment.changeBreakdown({ environmentId, input: reference }));
   const [threadPickerOpen, setThreadPickerOpen] = useState(false);
   const [openReviewRequest, setOpenReviewRequest] = useState(0);
   const [tab, setTab] = useState<PullRequestDetailTab>(initialTab);
@@ -548,6 +565,7 @@ export function PullRequestDetailPanel({
   };
   // A stale toast belongs to the pull request that produced it. Do not leave an action around
   // that can refresh a pull request the reader has already navigated away from.
+  // oxlint-disable-next-line t3code/react-effect-budget -- cleanup of an external toast when the PR scope changes.
   useEffect(
     () => () => {
       if (staleToastRef.current?.key !== tabScopeKey) return;
@@ -612,6 +630,7 @@ export function PullRequestDetailPanel({
     }
     activityRevision.current = next;
   }, [activityQuery.isPending, coreDetail, tabScopeKey]);
+  // oxlint-disable-next-line t3code/react-effect-budget -- a settled read ends the background-refresh window the query owns.
   useEffect(() => {
     if (!detailQuery.isPending) backgroundRefreshKeyRef.current = null;
   }, [detailQuery.isPending]);

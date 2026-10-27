@@ -229,8 +229,9 @@ explicit refresh invalidates the host cache and increments the code refresh toke
 
 The mechanism is intentionally local to the detail panel:
 
-- [`useLiveRefresh.ts`](../../apps/web/src/hooks/useLiveRefresh.ts) has a `poll` option. The PR
-  list and detail use `poll: false`, retaining focus/visibility reads without an interval.
+- The PR list and detail pass upstream's `intervalMs: null` to
+  [`useLiveRefresh.ts`](../../apps/web/src/hooks/useLiveRefresh.ts), retaining focus/visibility
+  reads without an interval.
 - [`PullRequestDetailPanel.tsx`](../../apps/web/src/components/pullRequest/PullRequestDetailPanel.tsx)
   records that a new revision came from a background read, preserves the code tab, and owns the
   stale state and toast lifecycle. It passes `codeIsStale` to

@@ -69,7 +69,7 @@ const decodeReplayTranscriptJson = Schema.decodeUnknownEffect(replayTranscriptJs
 const encodeStringJson = Schema.encodeEffect(Schema.fromJsonString(Schema.String));
 
 describe("CodexAdapterV2 context usage", () => {
-  it("keeps last-response accounting separate from live context", () => {
+  it("uses the current context rather than cumulative processed tokens", () => {
     const usage = CodexAdapterV2.codexProviderTurnTokenUsage(
       {
         total: {
@@ -93,7 +93,6 @@ describe("CodexAdapterV2 context usage", () => {
 
     assert.deepEqual(usage, {
       usedTokens: 50_000,
-      contextUsageAvailable: false,
       maxTokens: 200_000,
       inputTokens: 45_000,
       cachedInputTokens: 10_000,

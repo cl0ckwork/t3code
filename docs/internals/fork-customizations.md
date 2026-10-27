@@ -134,23 +134,22 @@ from skills; do not consume or rewrite a real provider command because its name 
 
 ## Context and thread usage
 
-The upstream `contextWindowMeterEnabled` preference controls whether the composer meter is shown.
-When enabled, it distinguishes live native context occupancy from accounting that merely describes
-the most recent provider response. This is essential for Codex: its app server reports the latest
-request's token total and model window, but not the transcript size after automatic compaction.
+Codex's app server has no request for the current transcript size. Its best signal is
+`thread/tokenUsage/updated`: `last.totalTokens` is the context sent with the most recent model
+request, against `modelContextWindow`. Upstream shows that as a normal percentage, which is
+correct until a compaction finishes. Between that compaction and the next request, the number
+still describes the pre-compaction transcript.
 
-[`CodexAdapterV2.ts`](../../apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts) marks
-that report with `contextUsageAvailable: false`. The contract in
-[`providerRuntime.ts`](../../packages/contracts/src/providerRuntime.ts) carries the distinction to
-the web client. [`ContextWindowMeter.tsx`](../../apps/web/src/components/chat/ContextWindowMeter.tsx)
-then shows **Last request context** rather than a fake percentage, remaining-token count, or
-automatic compact recommendation. Actual live reports from providers that support them retain the
-normal context-window progress UI.
+The fork marks that window instead of hiding the percentage.
+[`contextWindow.ts`](../../apps/web/src/lib/contextWindow.ts) sets `compactedSinceReport` when the
+thread's latest completed `compaction` item is newer than the usage report. The rule is
+provider-neutral and needs no contract change: compaction items already reach the client.
+[`ContextWindowMeter.tsx`](../../apps/web/src/components/chat/ContextWindowMeter.tsx) mutes the
+ring and says the value predates the compaction, and the resume-compaction banner in `ChatView`
+does not offer to compact on a stale reading. The next usage report clears the mark.
 
-Never use an estimate as capacity data. [`ContextHandoffBudget.ts`](../../apps/server/src/orchestration-v2/ContextHandoffBudget.ts)
-excludes estimate-only reports from history handoff and model-switch calculations, and the resume
-compact banner appears only for live context telemetry. The useful invariant is: no UI or
-orchestration decision may imply that a last-response token count is the current native context.
+The upstream `contextWindowMeterEnabled` toggle (Settings, Labs, Legacy) still controls whether
+the meter shows. Drop this section's code if upstream starts reporting post-compaction context.
 
 ## Sidebar grouping and ordering
 

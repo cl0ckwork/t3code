@@ -2414,7 +2414,7 @@ export default function ChatView(props: ChatViewProps) {
     : null;
   const resumeCompactionTokens =
     activeContextWindow &&
-    activeContextWindow.contextUsageAvailable &&
+    !activeContextWindow.compactedSinceReport &&
     resolveIdleCompaction(
       settings,
       activeProviderInstanceId ?? ProviderInstanceId.make("claudeAgent"),

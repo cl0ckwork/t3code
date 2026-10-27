@@ -38,8 +38,7 @@ export function latestNativeContextUsage(
     if (
       turn.providerThreadId !== providerThread.id ||
       turn.runAttemptId === null ||
-      !turn.tokenUsage ||
-      turn.tokenUsage.contextUsageAvailable === false
+      !turn.tokenUsage
     )
       continue;
     const attempt = attempts.get(turn.runAttemptId);
@@ -73,12 +72,7 @@ export function contextUsageForHandoff(input: {
   readonly previousUsage: ThreadTokenUsageSnapshot | null | undefined;
   readonly knownModelWindow?: number | undefined;
 }): ThreadTokenUsageSnapshot | null {
-  if (
-    !input.sameNativeThread ||
-    input.previousUsage == null ||
-    input.previousUsage.contextUsageAvailable === false
-  )
-    return null;
+  if (!input.sameNativeThread || input.previousUsage == null) return null;
   if (input.sameSelection) return input.previousUsage;
   const reportedMax =
     input.previousUsage.maxTokens != null && input.previousUsage.maxTokens > 0

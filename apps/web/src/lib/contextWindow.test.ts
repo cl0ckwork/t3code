@@ -69,21 +69,46 @@ describe("live provider-turn usage (#8144)", () => {
     ).toBe("Compacts automatically at about 150,000 tokens.");
   });
 
-  it("does not present last-response accounting as live context", () => {
-    const snapshot = deriveLatestContextWindowSnapshot([], {
-      usedTokens: 42_000,
-      contextUsageAvailable: false,
-      maxTokens: 200_000,
-      updatedAt: "2026-08-27T00:00:00.000Z",
-    });
-    expect(snapshot).toMatchObject({
-      contextUsageAvailable: false,
-      usedTokens: 42_000,
-      lastUsedTokens: 42_000,
-      maxTokens: 200_000,
-      usedPercentage: null,
-      remainingTokens: null,
-    });
+  const completedCompaction = (completedAt: string) => ({
+    item: {
+      id: "compaction-1" as never,
+      threadId: "thread-1" as never,
+      runId: null,
+      nodeId: null,
+      providerThreadId: null,
+      providerTurnId: null,
+      nativeItemRef: null,
+      parentItemId: null,
+      ordinal: 1,
+      status: "completed" as const,
+      title: null,
+      startedAt: null,
+      completedAt: DateTime.makeUnsafe(completedAt),
+      updatedAt: DateTime.makeUnsafe(completedAt),
+      type: "compaction" as const,
+      driver: null,
+    },
+  });
+  const lastRequestUsage = decodeTokenUsage({
+    usedTokens: 180_000,
+    maxTokens: 200_000,
+    updatedAt: "2026-08-27T00:00:00.000Z",
+  });
+
+  it("marks a report that predates the latest compaction as stale", () => {
+    const snapshot = deriveLatestContextWindowSnapshot(
+      [completedCompaction("2026-08-27T00:00:05.000Z")],
+      lastRequestUsage,
+    );
+    expect(snapshot).toMatchObject({ compactedSinceReport: true, usedPercentage: 90 });
+  });
+
+  it("clears the stale mark once a report follows the compaction", () => {
+    const snapshot = deriveLatestContextWindowSnapshot(
+      [completedCompaction("2026-08-26T23:59:55.000Z")],
+      lastRequestUsage,
+    );
+    expect(snapshot?.compactedSinceReport).toBe(false);
   });
 });
 

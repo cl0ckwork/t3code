@@ -18,8 +18,8 @@ type NullableContextWindowUsage = {
 };
 
 export type ContextWindowSnapshot = NullableContextWindowUsage & {
-  /** Whether the provider measured live native-context occupancy. */
-  readonly contextUsageAvailable: boolean;
+  /** A compaction finished after this report, so `usedTokens` predates it. */
+  readonly compactedSinceReport: boolean;
   readonly remainingTokens: number | null;
   readonly usedPercentage: number | null;
   readonly remainingPercentage: number | null;
@@ -56,6 +56,18 @@ export function latestProviderTurnTokenUsage(
   );
 }
 
+function latestCompletedCompactionAt(
+  entries: ReadonlyArray<{ readonly item: ThreadStructureTurnItem }>,
+): number | null {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const item = entries[index]?.item;
+    if (item?.type === "compaction" && item.status === "completed") {
+      return DateTime.toEpochMillis(item.completedAt ?? item.updatedAt);
+    }
+  }
+  return null;
+}
+
 export function deriveLatestContextWindowSnapshot(
   entries: ReadonlyArray<{
     readonly item: ThreadStructureTurnItem;
@@ -63,22 +75,18 @@ export function deriveLatestContextWindowSnapshot(
   liveUsage?: OrchestrationV2ProviderTurnTokenUsage | null,
   providerThread?: Pick<OrchestrationV2ProviderThread, "contextUsage" | "updatedAt"> | null,
 ): ContextWindowSnapshot | null {
+  const compactedAt = latestCompletedCompactionAt(entries);
   if (liveUsage != null) {
     const usedTokens = Math.max(0, liveUsage.usedTokens);
-    const contextUsageAvailable = liveUsage.contextUsageAvailable !== false;
     const maxTokens = liveUsage.maxTokens ?? null;
     const usedPercentage =
-      contextUsageAvailable && maxTokens !== null && maxTokens > 0
-        ? Math.min(100, (usedTokens / maxTokens) * 100)
-        : null;
+      maxTokens !== null && maxTokens > 0 ? Math.min(100, (usedTokens / maxTokens) * 100) : null;
     const remainingTokens =
-      contextUsageAvailable && maxTokens !== null
-        ? Math.max(0, Math.round(maxTokens - usedTokens))
-        : null;
+      maxTokens !== null ? Math.max(0, Math.round(maxTokens - usedTokens)) : null;
     const remainingPercentage = usedPercentage !== null ? Math.max(0, 100 - usedPercentage) : null;
     return {
       usedTokens,
-      contextUsageAvailable,
+      compactedSinceReport: compactedAt !== null && compactedAt > Date.parse(liveUsage.updatedAt),
       totalProcessedTokens: null,
       maxTokens,
       remainingTokens,
@@ -88,7 +96,7 @@ export function deriveLatestContextWindowSnapshot(
       cachedInputTokens: liveUsage.cachedInputTokens ?? null,
       outputTokens: liveUsage.outputTokens ?? null,
       reasoningOutputTokens: liveUsage.reasoningOutputTokens ?? null,
-      lastUsedTokens: contextUsageAvailable ? null : usedTokens,
+      lastUsedTokens: null,
       lastInputTokens: null,
       lastCachedInputTokens: null,
       lastOutputTokens: null,
@@ -108,22 +116,17 @@ export function deriveLatestContextWindowSnapshot(
     providerUsage !== undefined &&
     providerUsageUpdatedAt !== undefined
   ) {
-    const contextUsageAvailable = providerUsage.contextUsageAvailable !== false;
     const maxTokens = asFiniteNumber(providerUsage.maxTokens);
     const usedTokens = providerUsage.usedTokens;
     const usedPercentage =
-      contextUsageAvailable && maxTokens !== null && maxTokens > 0
-        ? Math.min(100, (usedTokens / maxTokens) * 100)
-        : null;
+      maxTokens !== null && maxTokens > 0 ? Math.min(100, (usedTokens / maxTokens) * 100) : null;
     return {
       usedTokens,
-      contextUsageAvailable,
+      compactedSinceReport:
+        compactedAt !== null && compactedAt > DateTime.toEpochMillis(providerUsageUpdatedAt),
       totalProcessedTokens: asFiniteNumber(providerUsage.totalProcessedTokens),
       maxTokens,
-      remainingTokens:
-        !contextUsageAvailable || maxTokens === null
-          ? null
-          : Math.max(0, Math.round(maxTokens - usedTokens)),
+      remainingTokens: maxTokens === null ? null : Math.max(0, Math.round(maxTokens - usedTokens)),
       usedPercentage,
       remainingPercentage: usedPercentage === null ? null : Math.max(0, 100 - usedPercentage),
       inputTokens: asFiniteNumber(providerUsage.inputTokens),
@@ -163,7 +166,7 @@ export function deriveLatestContextWindowSnapshot(
 
     return {
       usedTokens,
-      contextUsageAvailable: true,
+      compactedSinceReport: false,
       totalProcessedTokens: asFiniteNumber(payload.beforeTokenCount),
       maxTokens,
       remainingTokens,

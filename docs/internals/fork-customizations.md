@@ -124,7 +124,7 @@ inside code, `/skill` chips, and the same rule in Claude dispatch.
 The parsing and inline-token contract is shared in
 [`composerInlineTokens.ts`](../../packages/shared/src/composerInlineTokens.ts) and
 [`composerTrigger.ts`](../../packages/shared/src/composerTrigger.ts). The web editor and command
-menu live in [`ComposerPromptEditor.tsx`](../../apps/web/src/components/ComposerPromptEditor.tsx)
+menu live in [`ComposerPromptEditorTiptap.tsx`](../../apps/web/src/components/ComposerPromptEditorTiptap.tsx)
 and [`ComposerCommandMenu.tsx`](../../apps/web/src/components/chat/ComposerCommandMenu.tsx).
 Mobile mirrors the trigger behavior in `apps/mobile/src/features/threads` and its native composer
 components.
@@ -168,6 +168,11 @@ prefers one unambiguous, non-temporary branch reported by the threads in that wo
 back to the directory basename while branch creation is still pending or thread metadata conflicts.
 Do not rename a live worktree merely to improve this label: Git, persisted thread state, and a
 running provider may all hold its path.
+
+Upstream's opt-in boring sidebar (Settings) draws Active rows in project folders. It overlaps only
+the `project` mode, so the fork keeps its grouping, but the two never stack: while the boring
+sidebar is on, the effective grouping is `none` and the grouping controls are hidden. The stored
+choice returns when the boring sidebar is turned off.
 
 Upstream lifecycle shelves stay structurally above grouping:
 

@@ -84,19 +84,7 @@ export const make = Effect.gen(function* () {
       };
     }
 
-    const getDriverDiffPreview = handle.driver.getDiffPreview;
-    if (!getDriverDiffPreview) {
-      if (handle.kind === "git") {
-        return yield* git.getReviewDiffPreview(driverInput);
-      }
-      return yield* new VcsUnsupportedOperationError({
-        operation: "ReviewService.getDiffPreview",
-        kind: handle.kind,
-        detail: `The ${handle.kind} VCS driver does not support review diff previews.`,
-      });
-    }
-
-    return yield* getDriverDiffPreview(driverInput);
+    return yield* git.getReviewDiffPreview(driverInput);
   });
 
   const getDiffFileContents: ReviewService["Service"]["getDiffFileContents"] = Effect.fn(

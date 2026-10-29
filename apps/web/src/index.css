@@ -1277,6 +1277,38 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   }
 }
 
+/* Worktree marks. Neighbouring slots are 150 degrees apart, so a worktree that probes past a
+   taken slot lands on a distant hue. */
+:root {
+  --worktree-0: oklch(0.6 0.15 25);
+  --worktree-1: oklch(0.6 0.15 175);
+  --worktree-2: oklch(0.6 0.15 325);
+  --worktree-3: oklch(0.6 0.15 115);
+  --worktree-4: oklch(0.6 0.15 265);
+  --worktree-5: oklch(0.6 0.15 55);
+  --worktree-6: oklch(0.6 0.15 205);
+  --worktree-7: oklch(0.6 0.15 355);
+  --worktree-8: oklch(0.6 0.15 145);
+  --worktree-9: oklch(0.6 0.15 295);
+  --worktree-10: oklch(0.6 0.15 85);
+  --worktree-11: oklch(0.6 0.15 235);
+
+  @variant dark {
+    --worktree-0: oklch(0.74 0.14 25);
+    --worktree-1: oklch(0.74 0.14 175);
+    --worktree-2: oklch(0.74 0.14 325);
+    --worktree-3: oklch(0.74 0.14 115);
+    --worktree-4: oklch(0.74 0.14 265);
+    --worktree-5: oklch(0.74 0.14 55);
+    --worktree-6: oklch(0.74 0.14 205);
+    --worktree-7: oklch(0.74 0.14 355);
+    --worktree-8: oklch(0.74 0.14 145);
+    --worktree-9: oklch(0.74 0.14 295);
+    --worktree-10: oklch(0.74 0.14 85);
+    --worktree-11: oklch(0.74 0.14 235);
+  }
+}
+
 /* Modified files get a muted blue so added and deleted files lead. Built from the info token,
    which themes do not override, so it stays blue in every theme. */
 :root {

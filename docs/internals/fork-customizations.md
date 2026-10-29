@@ -192,6 +192,28 @@ order. Drag/reorder and sweep interactions are disabled while grouping is enable
 sortable layout has no group headers, so letting it operate against grouped DOM can apply a drop to
 a different row. Ungrouped mode keeps the existing row and drag-release interactions.
 
+## Worktree colours
+
+Several threads often work in one worktree, and the sidebar is often closed. Each worktree gets a
+colour mark, always beside a text label (its branch, or its folder while the branch is a temporary
+`t3/...` name): in the chat header breadcrumb, on the command palette's worktree icon, and on
+sidebar groups in `workspace` grouping. Root-checkout threads get no mark.
+
+[`worktreeColors.ts`](../../packages/client-runtime/src/state/worktreeColors.ts) derives the
+colours from thread shells alone, so every client agrees without stored state. A plain hash of the
+path collided for most of a real set of 10 open worktrees, so open worktrees (any unsettled,
+unarchived thread) claim colours oldest first by their first thread, probing past taken slots.
+Keep these invariants:
+
+- Up to `WORKTREE_COLOR_COUNT` open worktrees never share a colour.
+- Opening a newer worktree never recolours an older one. Closing an older one may recolour newer
+  ones; that is the accepted cost of having no stored assignment.
+- Same path on two environments is two worktrees.
+
+The palette lives in `--worktree-*` in `index.css`; neighbouring slots are far apart in hue so a
+probe does not land on a near-identical colour. Mobile does not show the mark yet; it can reuse the
+client-runtime helpers.
+
 ## Project action lifecycle hooks
 
 Project actions can be invoked manually, on worktree creation, or after a thread settles. The

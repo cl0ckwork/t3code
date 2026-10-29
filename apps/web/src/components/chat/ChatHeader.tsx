@@ -41,6 +41,9 @@ import { cn } from "~/lib/utils";
 import { textDirection } from "~/textDirection";
 import { useClientSettings } from "../../hooks/useSettings";
 import { GuestShareIndicator } from "./GuestShareControls";
+import { worktreeLabel } from "@t3tools/client-runtime/state/worktree-colors";
+import { useQuietThreadShell } from "../../state/entities";
+import { WorktreeColorDot } from "../WorktreeColorDot";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
@@ -87,6 +90,8 @@ export const ChatHeader = memo(function ChatHeader({
   const breadcrumbContainerRef = useRef<HTMLDivElement>(null);
   const [collapseParentTitle, setCollapseParentTitle] = useState(false);
   const activeThreadRef = scopeThreadRef(activeThreadEnvironmentId, activeThreadId);
+  const activeThreadShell = useQuietThreadShell(isServerThread ? activeThreadRef : null);
+  const activeWorktreePath = activeThreadShell?.worktreePath?.trim() || null;
   const canOperateThread = useEnvironmentScope(
     activeThreadEnvironmentId,
     AuthOrchestrationOperateScope,
@@ -305,6 +310,34 @@ export const ChatHeader = memo(function ChatHeader({
                   </WorkspaceBreadcrumbText>
                 </TooltipTrigger>
                 <TooltipPopup side="top">New thread in {activeProjectName}</TooltipPopup>
+              </Tooltip>
+            </WorkspaceBreadcrumbItem>
+            <WorkspaceBreadcrumbSeparator>
+              <WorkspaceBreadcrumbText>/</WorkspaceBreadcrumbText>
+            </WorkspaceBreadcrumbSeparator>
+          </>
+        ) : null}
+        {activeWorktreePath ? (
+          <>
+            <WorkspaceBreadcrumbItem className="shrink">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 text-muted-foreground" />
+                  }
+                >
+                  <WorktreeColorDot
+                    environmentId={activeThreadEnvironmentId}
+                    worktreePath={activeWorktreePath}
+                  />
+                  <WorkspaceBreadcrumbText className="max-w-40">
+                    {worktreeLabel({
+                      branch: activeThreadShell?.branch ?? null,
+                      worktreePath: activeWorktreePath,
+                    })}
+                  </WorkspaceBreadcrumbText>
+                </TooltipTrigger>
+                <TooltipPopup side="top">Worktree: {activeWorktreePath}</TooltipPopup>
               </Tooltip>
             </WorkspaceBreadcrumbItem>
             <WorkspaceBreadcrumbSeparator>

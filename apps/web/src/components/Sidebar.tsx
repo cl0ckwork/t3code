@@ -61,6 +61,7 @@ import {
 import type { OlderSettledScope } from "@t3tools/client-runtime/state/threads";
 
 import { fileBasename } from "@t3tools/shared/path";
+import { WorktreeColorDot } from "./WorktreeColorDot";
 import {
   ArrowDownUpIcon,
   CheckIcon,
@@ -3448,6 +3449,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               data-thread-selection-safe
                               className="mb-1 mt-3 flex items-center gap-2 px-2.5"
                             >
+                              {sidebarThreadGrouping === "workspace" && group.threads[0] ? (
+                                <WorktreeColorDot
+                                  environmentId={group.threads[0].environmentId}
+                                  worktreePath={group.threads[0].worktreePath}
+                                />
+                              ) : null}
                               <span className="min-w-0 truncate text-xs font-medium text-sidebar-muted-foreground">
                                 {group.label}
                               </span>

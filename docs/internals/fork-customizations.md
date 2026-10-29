@@ -146,7 +146,9 @@ thread's latest completed `compaction` item is newer than the usage report. The 
 provider-neutral and needs no contract change: compaction items already reach the client.
 [`ContextWindowMeter.tsx`](../../apps/web/src/components/chat/ContextWindowMeter.tsx) mutes the
 ring and says the value predates the compaction, and the resume-compaction banner in `ChatView`
-does not offer to compact on a stale reading. The next usage report clears the mark.
+does not offer to compact on a stale reading. Upstream's thread details Context row
+([`ThreadDetailsUsage.tsx`](../../apps/web/src/components/chat/ThreadDetailsUsage.tsx)) reads the
+same snapshot and carries the same note. The next usage report clears the mark.
 
 The upstream `contextWindowMeterEnabled` toggle (Settings, Labs, Legacy) still controls whether
 the meter shows. Drop this section's code if upstream starts reporting post-compaction context.

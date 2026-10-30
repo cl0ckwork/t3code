@@ -955,7 +955,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       : isSelected || props.sweepAction !== null
         ? "bg-sidebar-row-selected text-sidebar-foreground light:ring-1 light:ring-inset light:ring-sidebar-border/70"
         : hasUnsentDraft
-          ? cn(draftSurfaceClassName, "text-sidebar-foreground")
+          ? // The amber draft fill would mix with the worktree wash; the pen still marks the draft.
+            worktreeColor === null
+            ? cn(draftSurfaceClassName, "text-sidebar-foreground")
+            : "bg-transparent text-sidebar-foreground hover:bg-sidebar-row-hover"
           : shouldRecede
             ? "text-sidebar-muted-foreground/75 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
             : "bg-transparent text-sidebar-foreground hover:bg-sidebar-row-hover",

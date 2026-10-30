@@ -204,7 +204,8 @@ every sidebar thread row carry a soft left-edge fade (`.worktree-fade`); the com
 sidebar rows tint their worktree icon; sidebar `workspace` groups show a dot. The fade is drawn only
 with background images inside `@layer components`, so row rings, focus rings, and the drag
 background still win. The selected row (`aria-current`) carries a stronger wash and edge so the
-colour still reads over its fill. Command palette rows keep the icon tint only, because a fade would compete
+colour still reads over its fill. A coloured row with an unsent draft drops the amber draft fill,
+which would mix with the wash into a different-looking colour; its pen icon still marks the draft. Command palette rows keep the icon tint only, because a fade would compete
 with the selected-row highlight. Root-checkout threads get no colour.
 
 [`worktreeColors.ts`](../../packages/client-runtime/src/state/worktreeColors.ts) derives the

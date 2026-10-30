@@ -57,6 +57,8 @@ import {
   type PullRequestGlyphIcon,
 } from "./pullRequest/pullRequestIcons";
 import { resolvePullRequestState } from "./pullRequest/pullRequestPresentation";
+import { useWorktreeColor } from "../state/worktreeColors";
+import { worktreeColorVar } from "./WorktreeColorDot";
 
 export interface PrStatusIndicator {
   label: string;
@@ -572,9 +574,10 @@ export function ThreadTerminalStatusButton({
 export function ThreadWorktreeIndicator({
   thread,
 }: {
-  thread: Pick<SidebarThreadSummary, "id" | "branch" | "worktreePath">;
+  thread: Pick<SidebarThreadSummary, "id" | "environmentId" | "branch" | "worktreePath">;
 }) {
   const worktreePath = thread.worktreePath?.trim();
+  const worktreeColor = useWorktreeColor(thread.environmentId, worktreePath ?? null);
   if (!worktreePath) {
     return null;
   }
@@ -596,7 +599,10 @@ export function ThreadWorktreeIndicator({
           />
         }
       >
-        <FolderGit2Icon className="size-3.5 shrink-0 text-icon-muted" />
+        <FolderGit2Icon
+          className="size-3.5 shrink-0 text-icon-muted"
+          style={worktreeColor === null ? undefined : { color: worktreeColorVar(worktreeColor) }}
+        />
       </TooltipTrigger>
       <TooltipPopup side="top">{tooltip}</TooltipPopup>
     </Tooltip>

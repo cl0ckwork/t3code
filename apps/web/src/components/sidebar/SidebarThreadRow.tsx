@@ -74,6 +74,8 @@ import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { cn } from "~/lib/utils";
 import { textDirection } from "~/textDirection";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
+import { useWorktreeColor } from "../../state/worktreeColors";
+import { worktreeFadeStyle } from "../WorktreeColorDot";
 import {
   animateSidebarLayoutChanges,
   hasUnseenCompletion,
@@ -652,6 +654,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     variant,
     variantAction,
   } = props;
+  const worktreeColor = useWorktreeColor(thread.environmentId, thread.worktreePath);
   const threadRef = scopeThreadRef(thread.environmentId, thread.id);
   const threadKey = scopedThreadKey(threadRef);
   const canOperateThread = useEnvironmentScope(thread.environmentId, AuthOrchestrationOperateScope);
@@ -942,6 +945,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   };
 
   const rowSurfaceClassName = cn(
+    worktreeColor !== null && "worktree-fade",
     "group/sidebar-row relative w-full cursor-pointer overflow-hidden rounded-md text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
     variantAction === "unsettle" &&
       !props.isActive &&
@@ -1211,6 +1215,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 role="treeitem"
                 tabIndex={-1}
                 data-sidebar-row={threadKey}
+                style={worktreeFadeStyle(worktreeColor)}
                 data-sidebar-parent={props.navigationParent}
                 aria-label={accessibility.label}
                 aria-current={accessibility.current}
@@ -1399,6 +1404,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               role="treeitem"
               tabIndex={-1}
               data-sidebar-row={threadKey}
+              style={worktreeFadeStyle(worktreeColor)}
               data-sidebar-parent={props.navigationParent}
               aria-label={accessibility.label}
               aria-current={accessibility.current}

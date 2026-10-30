@@ -1309,16 +1309,33 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   }
 }
 
-/* A soft wash from the left edge; background-image keeps the element's own background colour, and
-   an inset shadow draws the edge without changing layout. */
-.worktree-fade {
-  background-image: linear-gradient(
-    90deg,
-    color-mix(in oklch, var(--worktree-color) 16%, transparent) 0%,
-    color-mix(in oklch, var(--worktree-color) 5%, transparent) 35%,
-    transparent 60%
-  );
-  box-shadow: inset 2px 0 0 color-mix(in oklch, var(--worktree-color) 70%, transparent);
+/* A soft wash from a thin left edge. Both are background images, so the element keeps its own
+   background colour, rings and shadows; utilities that set a background image still win. */
+@layer components {
+  .worktree-fade {
+    --worktree-edge: 70%;
+    --worktree-wash: 16%;
+    --worktree-wash-mid: 5%;
+    background-image:
+      linear-gradient(
+        90deg,
+        color-mix(in oklch, var(--worktree-color) var(--worktree-edge), transparent) 0 2px,
+        transparent 2px
+      ),
+      linear-gradient(
+        90deg,
+        color-mix(in oklch, var(--worktree-color) var(--worktree-wash), transparent) 0%,
+        color-mix(in oklch, var(--worktree-color) var(--worktree-wash-mid), transparent) 35%,
+        transparent 60%
+      );
+  }
+
+  /* Over the selected row's lighter fill a 16% wash turns grey, so it carries more colour. */
+  .worktree-fade[aria-current="page"] {
+    --worktree-edge: 100%;
+    --worktree-wash: 26%;
+    --worktree-wash-mid: 10%;
+  }
 }
 
 /* Modified files get a muted blue so added and deleted files lead. Built from the info token,

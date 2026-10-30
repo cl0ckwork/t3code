@@ -198,12 +198,14 @@ a different row. Ungrouped mode keeps the existing row and drag-release interact
 
 ## Worktree colours
 
-Several threads often work in one worktree, and the sidebar is often closed. Each worktree gets a
-colour, always paired with a text label (its branch, or its folder while the branch is a temporary
-`t3/...` name). The chat header carries a soft left-edge fade (`.worktree-fade`) with the label in
-its breadcrumb; the command palette tints its worktree icon; sidebar `workspace` groups show a dot.
-Palette rows keep the icon tint rather than a fade, which would compete with the selected-row
-highlight. Root-checkout threads get no colour.
+Several threads often work in one worktree. Each worktree gets a colour, always paired with a text
+label (its branch, or its folder while the branch is a temporary `t3/...` name). The chat header and
+every sidebar thread row carry a soft left-edge fade (`.worktree-fade`); the command palette and
+sidebar rows tint their worktree icon; sidebar `workspace` groups show a dot. The fade is drawn only
+with background images inside `@layer components`, so row rings, focus rings, and the drag
+background still win. The selected row (`aria-current`) carries a stronger wash and edge so the
+colour still reads over its fill. Command palette rows keep the icon tint only, because a fade would compete
+with the selected-row highlight. Root-checkout threads get no colour.
 
 [`worktreeColors.ts`](../../packages/client-runtime/src/state/worktreeColors.ts) derives the
 colours from thread shells alone, so every client agrees without stored state. A plain hash of the

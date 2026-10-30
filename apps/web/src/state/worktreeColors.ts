@@ -24,11 +24,13 @@ const NO_WORKTREE_COLOR_ATOM = Atom.make<number | null>(null).pipe(
 );
 
 export function useWorktreeColor(
-  environmentId: EnvironmentId,
+  environmentId: EnvironmentId | null,
   worktreePath: string | null,
 ): number | null {
   const path = worktreePath?.trim();
   return useAtomValue(
-    path ? worktreeColorAtom(worktreeColorKey(environmentId, path)) : NO_WORKTREE_COLOR_ATOM,
+    environmentId && path
+      ? worktreeColorAtom(worktreeColorKey(environmentId, path))
+      : NO_WORKTREE_COLOR_ATOM,
   );
 }

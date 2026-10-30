@@ -44,7 +44,6 @@ import { useClientSettings } from "../../hooks/useSettings";
 import { GuestShareIndicator } from "./GuestShareControls";
 import { worktreeLabel } from "@t3tools/client-runtime/state/worktree-colors";
 import { useQuietThreadShell } from "../../state/entities";
-import { WorktreeColorDot } from "../WorktreeColorDot";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
@@ -330,10 +329,6 @@ export const ChatHeader = memo(function ChatHeader({
                     <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 text-muted-foreground" />
                   }
                 >
-                  <WorktreeColorDot
-                    environmentId={activeThreadEnvironmentId}
-                    worktreePath={activeWorktreePath}
-                  />
                   <WorkspaceBreadcrumbText className="max-w-40">
                     {worktreeLabel({
                       branch: activeThreadShell?.branch ?? null,

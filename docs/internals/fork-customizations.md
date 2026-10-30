@@ -199,9 +199,11 @@ a different row. Ungrouped mode keeps the existing row and drag-release interact
 ## Worktree colours
 
 Several threads often work in one worktree, and the sidebar is often closed. Each worktree gets a
-colour mark, always beside a text label (its branch, or its folder while the branch is a temporary
-`t3/...` name): in the chat header breadcrumb, on the command palette's worktree icon, and on
-sidebar groups in `workspace` grouping. Root-checkout threads get no mark.
+colour, always paired with a text label (its branch, or its folder while the branch is a temporary
+`t3/...` name). The chat header carries a soft left-edge fade (`.worktree-fade`) with the label in
+its breadcrumb; the command palette tints its worktree icon; sidebar `workspace` groups show a dot.
+Palette rows keep the icon tint rather than a fade, which would compete with the selected-row
+highlight. Root-checkout threads get no colour.
 
 [`worktreeColors.ts`](../../packages/client-runtime/src/state/worktreeColors.ts) derives the
 colours from thread shells alone, so every client agrees without stored state. A plain hash of the

@@ -1,9 +1,17 @@
+import type { CSSProperties } from "react";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { cn } from "~/lib/utils";
 import { useWorktreeColor } from "../state/worktreeColors";
 
 export function worktreeColorVar(color: number): string {
   return `var(--worktree-${color})`;
+}
+
+/** Inline style for an element with the `worktree-fade` class. */
+export function worktreeFadeStyle(color: number | null): CSSProperties | undefined {
+  return color === null
+    ? undefined
+    : ({ "--worktree-color": worktreeColorVar(color) } as CSSProperties);
 }
 
 /** Decorative: a text label beside it always names the worktree. */

@@ -1309,6 +1309,18 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   }
 }
 
+/* A soft wash from the left edge; background-image keeps the element's own background colour, and
+   an inset shadow draws the edge without changing layout. */
+.worktree-fade {
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--worktree-color) 16%, transparent) 0%,
+    color-mix(in oklch, var(--worktree-color) 5%, transparent) 35%,
+    transparent 60%
+  );
+  box-shadow: inset 2px 0 0 color-mix(in oklch, var(--worktree-color) 70%, transparent);
+}
+
 /* Modified files get a muted blue so added and deleted files lead. Built from the info token,
    which themes do not override, so it stays blue in every theme. */
 :root {

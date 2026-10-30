@@ -3,6 +3,13 @@ import { ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { GitCommandError } from "./git.ts";
 import { VcsError } from "./vcs.ts";
 
+export const ReviewDiffPreviewSourceKind = Schema.Literals([
+  "working-tree",
+  "branch-range",
+  "commit",
+]);
+export type ReviewDiffPreviewSourceKind = typeof ReviewDiffPreviewSourceKind.Type;
+
 /**
  * Client request for a live diff. The server resolves the workspace from the
  * persisted thread instead of trusting a client-supplied filesystem path.
@@ -10,13 +17,14 @@ import { VcsError } from "./vcs.ts";
 export const ReviewDiffPreviewFile = Schema.Struct({
   path: Schema.NonEmptyString,
   previousPath: Schema.NullOr(Schema.NonEmptyString),
-  sourceKind: Schema.Literals(["working-tree", "branch-range"]),
+  sourceKind: ReviewDiffPreviewSourceKind,
 });
 export type ReviewDiffPreviewFile = typeof ReviewDiffPreviewFile.Type;
 
 export const ReviewDiffPreviewRequest = Schema.Struct({
   threadId: ThreadId,
   baseRef: Schema.optional(TrimmedNonEmptyString),
+  commitSha: Schema.optional(TrimmedNonEmptyString),
   ignoreWhitespace: Schema.optionalKey(Schema.Boolean),
   file: Schema.optionalKey(ReviewDiffPreviewFile),
 });
@@ -26,13 +34,37 @@ export type ReviewDiffPreviewRequest = typeof ReviewDiffPreviewRequest.Type;
 export const ReviewDiffPreviewInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
   baseRef: Schema.optional(TrimmedNonEmptyString),
+  commitSha: Schema.optional(TrimmedNonEmptyString),
   ignoreWhitespace: Schema.optionalKey(Schema.Boolean),
   file: Schema.optionalKey(ReviewDiffPreviewFile),
 });
 export type ReviewDiffPreviewInput = typeof ReviewDiffPreviewInput.Type;
 
-export const ReviewDiffPreviewSourceKind = Schema.Literals(["working-tree", "branch-range"]);
-export type ReviewDiffPreviewSourceKind = typeof ReviewDiffPreviewSourceKind.Type;
+/** Client request for the thread workspace's branch commits. */
+export const ReviewBranchCommitsRequest = Schema.Struct({
+  threadId: ThreadId,
+  baseRef: Schema.optional(TrimmedNonEmptyString),
+});
+export type ReviewBranchCommitsRequest = typeof ReviewBranchCommitsRequest.Type;
+
+/** VCS-internal input after the server has resolved the thread workspace. */
+export const ReviewBranchCommitsInput = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+  baseRef: Schema.optional(TrimmedNonEmptyString),
+});
+export type ReviewBranchCommitsInput = typeof ReviewBranchCommitsInput.Type;
+
+export const ReviewBranchCommitsResult = Schema.Struct({
+  commits: Schema.Array(
+    Schema.Struct({
+      sha: Schema.String,
+      subject: Schema.String,
+      committedAt: Schema.String,
+    }),
+  ),
+  truncated: Schema.Boolean,
+});
+export type ReviewBranchCommitsResult = typeof ReviewBranchCommitsResult.Type;
 
 export const ReviewDiffFileStat = Schema.Struct({
   path: Schema.String,
@@ -46,6 +78,7 @@ export const ReviewDiffPreviewSource = Schema.Struct({
   id: TrimmedNonEmptyString,
   kind: ReviewDiffPreviewSourceKind,
   title: TrimmedNonEmptyString,
+  commitSubject: Schema.optionalKey(TrimmedNonEmptyString),
   baseRef: Schema.NullOr(TrimmedNonEmptyString),
   headRef: Schema.NullOr(TrimmedNonEmptyString),
   diff: Schema.String,

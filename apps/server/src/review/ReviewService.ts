@@ -7,6 +7,9 @@ import * as Option from "effect/Option";
 import {
   ReviewWorkspaceUnavailableError,
   VcsUnsupportedOperationError,
+  type ReviewBranchCommitsInput,
+  type ReviewBranchCommitsRequest,
+  type ReviewBranchCommitsResult,
   type ReviewDiffFileContentsInput,
   type ReviewDiffFileContentsRequest,
   type ReviewDiffFileContentsResult,
@@ -24,6 +27,9 @@ import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 export class ReviewService extends Context.Service<
   ReviewService,
   {
+    readonly getBranchCommits: (
+      input: ReviewBranchCommitsRequest,
+    ) => Effect.Effect<ReviewBranchCommitsResult, ReviewDiffPreviewError>;
     readonly getDiffPreview: (
       input: ReviewDiffPreviewRequest,
     ) => Effect.Effect<ReviewDiffPreviewResult, ReviewDiffPreviewError>;
@@ -64,6 +70,27 @@ export const make = Effect.gen(function* () {
     return projection.thread.worktreePath ?? project.value.workspaceRoot;
   });
 
+  const getBranchCommits: ReviewService["Service"]["getBranchCommits"] = Effect.fn(
+    "ReviewService.getBranchCommits",
+  )(function* (input) {
+    const cwd = yield* resolveThreadWorkspace(input.threadId);
+    const driverInput: ReviewBranchCommitsInput = {
+      cwd,
+      ...(input.baseRef === undefined ? {} : { baseRef: input.baseRef }),
+    };
+
+    const handle = yield* vcsRegistry.detect({ cwd, requestedKind: "auto" });
+    if (!handle) return { commits: [], truncated: false };
+    if (handle.kind !== "git") {
+      return yield* new VcsUnsupportedOperationError({
+        operation: "ReviewService.getBranchCommits",
+        kind: handle.kind,
+        detail: "Review commit lists require a Git repository.",
+      });
+    }
+    return yield* git.getReviewBranchCommits(driverInput);
+  });
+
   const getDiffPreview: ReviewService["Service"]["getDiffPreview"] = Effect.fn(
     "ReviewService.getDiffPreview",
   )(function* (input) {
@@ -71,6 +98,7 @@ export const make = Effect.gen(function* () {
     const driverInput: ReviewDiffPreviewInput = {
       cwd,
       ...(input.baseRef === undefined ? {} : { baseRef: input.baseRef }),
+      ...(input.commitSha === undefined ? {} : { commitSha: input.commitSha }),
       ...(input.ignoreWhitespace === undefined ? {} : { ignoreWhitespace: input.ignoreWhitespace }),
       ...(input.file === undefined ? {} : { file: input.file }),
     };
@@ -114,6 +142,7 @@ export const make = Effect.gen(function* () {
   });
 
   return ReviewService.of({
+    getBranchCommits,
     getDiffPreview,
     getDiffFileContents,
   });

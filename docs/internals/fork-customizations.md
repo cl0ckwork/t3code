@@ -24,9 +24,13 @@ retried against the server cwd and rendered an unrelated or empty diff.
 
 The review RPC now accepts only a `threadId`. [`ReviewService.ts`](../../apps/server/src/review/ReviewService.ts)
 uses persisted projection data to resolve `thread.worktreePath ?? project.workspaceRoot`; the
-VCS receives that derived path only after resolution. Preview requests and lazy full-file
-expansion share this boundary. Web and mobile send the selected thread id, and the web diff panel
-does not contain a fallback query against the server cwd.
+VCS receives that derived path only after resolution. Preview requests, upstream's local-commit
+list and per-commit previews, and lazy full-file expansion share this boundary. Web and mobile
+send the selected thread id, and the web diff panel does not contain a fallback query against the
+server cwd.
+
+Upstream now accepts a client `cwd` inside the server root or any known workspace. That fixes the
+common worktree rejection but still lets a client choose the path, so the fork keeps `threadId`.
 
 Keep these invariants on rebase:
 

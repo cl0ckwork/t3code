@@ -58,7 +58,8 @@ project checkout or thread worktree. The fork makes those scopes explicit.
 ### Upstream ownership and fork boundary
 
 Upstream owns normal provider discovery, the unified `/` and `$` picker, picker deduplication,
-workspace-snapshot freshness, and Claude's native selected-skill execution. Do not reintroduce a
+workspace-snapshot freshness, the picker's loading state while workspace skills are scanned, and
+Claude's native selected-skill execution. Do not reintroduce a
 second skill inventory or a client-side cache to duplicate those mechanisms.
 
 The fork deliberately keeps only the parts upstream does not yet provide equivalently:
@@ -118,9 +119,8 @@ and the Codex cwd/structured-skill attachment. Test the picker trigger/chip beha
 
 Skills are structured inline selections, not text substitutions. The composer accepts both
 `/skill-name` and `$skill-name`, displays selected skills as purple chips, supports selecting more
-than one skill, and leaves subsequent text as ordinary prompt text. Picker labels use
-`Title Case (skill-name): description` so a human-readable name and canonical invocation are both
-visible. Markdown inline code and fenced code blocks are always literal, so snippets such as
+than one skill, and leaves subsequent text as ordinary prompt text. Picker labels are upstream's:
+the provider display name when set, otherwise the skill's own name. Markdown inline code and fenced code blocks are always literal, so snippets such as
 `$eq` cannot become skill selections or reach send-time skill validation. Upstream's rich editor
 now keeps fenced code literal by itself; the fork still owns inline code, trigger suppression
 inside code, `/skill` chips, and the same rule in Claude dispatch.

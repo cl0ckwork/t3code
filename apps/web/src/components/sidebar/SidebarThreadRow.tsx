@@ -1215,8 +1215,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             render={
               <div
                 ref={rowRef}
-                role="treeitem"
-                tabIndex={-1}
+                role="button"
+                tabIndex={0}
                 data-sidebar-row={threadKey}
                 style={worktreeFadeStyle(worktreeColor)}
                 data-sidebar-parent={props.navigationParent}
@@ -1412,8 +1412,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           render={
             <div
               ref={rowRef}
-              role="treeitem"
-              tabIndex={-1}
+              role="button"
+              tabIndex={0}
               data-sidebar-row={threadKey}
               style={worktreeFadeStyle(worktreeColor)}
               data-sidebar-parent={props.navigationParent}

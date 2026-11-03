@@ -3,7 +3,6 @@ import { describe, expect, it } from "vite-plus/test";
 import { settleProjectScript, setupProjectScript } from "@t3tools/shared/projectScripts";
 
 import {
-  buildProjectScript,
   commandForProjectScript,
   nextProjectScriptId,
   primaryProjectScript,
@@ -11,25 +10,6 @@ import {
 } from "./projectScripts";
 
 describe("projectScripts helpers", () => {
-  it("records a lifecycle trigger only when the action opts into settlement", () => {
-    const input = {
-      name: "Cleanup preview",
-      command: "pnpm cleanup-preview",
-      icon: "configure" as const,
-      runOnWorktreeCreate: false,
-      waitForSetup: false,
-      runOnSettle: false,
-      previewUrl: null,
-      autoOpenPreview: false,
-    };
-    expect(buildProjectScript("cleanup", { ...input, runOnThreadSettle: true })).toMatchObject({
-      lifecycleTriggers: ["thread.settled"],
-    });
-    expect(
-      buildProjectScript("cleanup", { ...input, runOnThreadSettle: false }),
-    ).not.toHaveProperty("lifecycleTriggers");
-  });
-
   it.each(["install-javascript-dependencies", "A", "a.b", "a b", "-a", "", "a".repeat(25)])(
     "omits the shortcut for legacy script ID %j without crashing script menus",
     (id) => {
@@ -87,7 +67,6 @@ describe("projectScripts helpers", () => {
       command: "true",
       icon: "play",
       waitForSetup: false,
-      runOnThreadSettle: false,
       previewUrl: null,
       autoOpenPreview: false,
     } as const;

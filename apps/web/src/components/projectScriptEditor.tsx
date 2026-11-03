@@ -83,7 +83,6 @@ export interface NewProjectScriptInput {
   command: string;
   icon: ProjectScriptIcon;
   runOnWorktreeCreate: boolean;
-  runOnThreadSettle: boolean;
   waitForSetup: boolean;
   runOnSettle: boolean;
   /** Omit to preserve the current shortcut when the form did not edit it. */
@@ -99,7 +98,6 @@ export const EMPTY_PROJECT_SCRIPT_INPUT: NewProjectScriptInput = {
   command: "",
   icon: "play",
   runOnWorktreeCreate: false,
-  runOnThreadSettle: false,
   waitForSetup: false,
   runOnSettle: false,
   keybinding: null,
@@ -124,7 +122,6 @@ export function editorRequestForScript(
       command: script.command,
       icon: script.icon,
       runOnWorktreeCreate: script.runOnWorktreeCreate,
-      runOnThreadSettle: script.lifecycleTriggers?.includes("thread.settled") ?? false,
       waitForSetup: script.runOnWorktreeCreate && script.async === false,
       runOnSettle: script.runOnSettle ?? false,
       keybinding: keybindingValueForCommand(keybindings, commandForProjectScript(script.id)),
@@ -276,7 +273,6 @@ function ProjectScriptEditorForm({
   const [runOnWorktreeCreate, setRunOnWorktreeCreate] = useState(
     request.initial.runOnWorktreeCreate,
   );
-  const [runOnThreadSettle, setRunOnThreadSettle] = useState(request.initial.runOnThreadSettle);
   const [waitForSetup, setWaitForSetup] = useState(request.initial.waitForSetup);
   const [runOnSettle, setRunOnSettle] = useState(request.initial.runOnSettle);
   const [keybinding, setKeybinding] = useState(request.initial.keybinding ?? "");
@@ -361,7 +357,6 @@ function ProjectScriptEditorForm({
         command: trimmedCommand,
         icon,
         runOnWorktreeCreate,
-        runOnThreadSettle,
         waitForSetup: runOnWorktreeCreate && waitForSetup,
         runOnSettle,
         ...((request.scriptId === null && canChangeKeybinding) || changesKeybinding
@@ -520,24 +515,7 @@ function ProjectScriptEditorForm({
               />
             </label>
             <label className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2 text-sm dark:border-transparent dark:bg-white/[0.035]">
-              <span className="flex min-w-0 flex-col gap-0.5">
-                <span>Run automatically when a thread settles</span>
-                <span className="text-xs text-muted-foreground">
-                  Runs in the thread workspace after manual or automatic settlement.
-                </span>
-              </span>
-              <Switch
-                checked={runOnThreadSettle}
-                onCheckedChange={(checked) => setRunOnThreadSettle(Boolean(checked))}
-              />
-            </label>
-            <label className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2 text-sm dark:border-transparent dark:bg-white/[0.035]">
-              <span className="flex min-w-0 flex-col gap-0.5">
-                <span>Run as the worktree cleanup action</span>
-                <span className="text-xs text-muted-foreground">
-                  Runs only in a dedicated worktree after settlement. Each project has one.
-                </span>
-              </span>
+              <span>Run in the thread's worktree when the thread settles</span>
               <Switch
                 checked={runOnSettle}
                 onCheckedChange={(checked) => setRunOnSettle(Boolean(checked))}

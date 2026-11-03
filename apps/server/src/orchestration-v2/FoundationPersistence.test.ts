@@ -2842,41 +2842,6 @@ it.layer(layerTest)("orchestration V2 foundation persistence", (it) => {
       }),
   );
 
-  it.effect(
-    "cancels a running lifecycle action after process loss instead of replaying cleanup",
-    () =>
-      Effect.gen(function* () {
-        const outbox = yield* EffectOutbox.EffectOutboxV2;
-        const commandId = CommandId.make("command:foundation-cancel-lifecycle-action");
-        const effectId = "effect:foundation-cancel-lifecycle-action";
-        yield* outbox.enqueue([
-          {
-            id: effectId,
-            commandId,
-            threadId: ThreadId.make("thread:foundation-cancel-lifecycle-action"),
-            request: {
-              type: "thread-lifecycle.run",
-              trigger: "thread.settled",
-              actionId: "cleanup",
-              actionName: "Cleanup preview",
-              command: "pnpm cleanup-preview",
-              cwd: "/workspace/project",
-              projectRoot: "/workspace/project",
-              worktreePath: null,
-            },
-          },
-        ]);
-        assert.isTrue(Option.isSome(yield* outbox.claimNext({ workerId: "crashed-worker" })));
-        assert.deepEqual(yield* outbox.reconcileAfterProcessLoss, {
-          cancelled: 1,
-          requeued: 0,
-        });
-        const lifecycleAction = yield* outbox.get(effectId);
-        assert.isTrue(Option.isSome(lifecycleAction));
-        if (Option.isSome(lifecycleAction)) assert.equal(lifecycleAction.value.status, "cancelled");
-      }),
-  );
-
   it.effect("atomically cancels stale runs and their process-bound effects", () =>
     Effect.gen(function* () {
       const eventSink = yield* EventSink.EventSinkV2;

@@ -66,7 +66,6 @@ The fork deliberately keeps only the parts upstream does not yet provide equival
 
 - workspace selection is derived on the server from persisted project/thread state rather than a
   client-provided path;
-- `/` may select another skill after an existing selection, as may `$`;
 - inline Markdown code and fenced code remain literal;
 - Codex selected skills are validated at dispatch and sent as native structured inputs.
 
@@ -225,35 +224,6 @@ Keep these invariants:
 The palette lives in `--worktree-*` in `index.css`; neighbouring slots are far apart in hue so a
 probe does not land on a near-identical colour. Mobile does not show the mark yet; it can reuse the
 client-runtime helpers.
-
-## Project action lifecycle hooks
-
-Project actions can be invoked manually, on worktree creation, or after a thread settles. The
-settlement trigger applies to both user-initiated and automatic settlement, but exactly once per
-real active-to-settled transition. Repeating Settle on an already settled thread must not launch a
-second cleanup action; an explicit unsettle followed by a later settle is a new transition and may
-launch it again.
-
-Upstream's `runOnSettle` is a different, worktree-only cleanup role. If a script has that role,
-the upstream cleanup runner owns it and the generic `thread.settled` outbox must skip it. The roles
-are mutually exclusive so one command cannot run twice for one settlement.
-
-The trigger is stored in [`ProjectScript`](../../packages/contracts/src/project.ts) as an extensible
-`lifecycleTriggers` list. The action editor exposes the current `thread.settled` trigger, imports it
-from `t3.json`, and shows `on settle` in the actions list. More lifecycle events can use the same
-contract without adding another action type.
-
-The execution boundary is deliberately durable and worktree-only. [`Orchestrator.ts`](../../apps/server/src/orchestration-v2/Orchestrator.ts)
-captures the chosen action and isolated worktree path in the outbox item that commits with the
-settlement event; root-checkout threads do not enqueue a generic lifecycle action. Before starting
-the action, [`EffectWorker.ts`](../../apps/server/src/orchestration-v2/EffectWorker.ts) re-reads
-the projection and no-ops when the thread has been re-engaged. Never accept a client cwd or
-re-resolve a later action configuration at execution time.
-
-The lifecycle effect is not replay-safe after process loss. Once the worker has started a shell,
-replaying could run external cleanup twice. A normal terminal-start failure remains retryable and
-visible through the outbox; an interrupted in-flight hook is cancelled instead of silently
-duplicating it.
 
 ## Pull-request refresh safety
 

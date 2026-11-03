@@ -4,7 +4,6 @@ import {
   CheckpointScopeId,
   CommandId,
   NodeId,
-  type OrchestrationV2ThreadProjection,
   ProviderSessionId,
   ProviderThreadId,
   ProviderTurnId,
@@ -35,7 +34,6 @@ import * as RuntimeRequestService from "./RuntimeRequestService.ts";
 import * as ThreadTitleRegenerationService from "./ThreadTitleRegenerationService.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
 import * as ServerSettings from "../serverSettings.ts";
-import * as TerminalManager from "../terminal/Manager.ts";
 
 const threadId = ThreadId.make("thread:effect-worker-restart");
 const oldSessionId = ProviderSessionId.make("provider-session:effect-worker-restart:old");
@@ -84,7 +82,6 @@ function layerExecutorFor(input: {
   readonly threads?: Partial<ThreadManagementService.ThreadManagementService["Service"]>;
   readonly continueAfterRestart?: boolean;
   readonly interrupt?: ProviderTurnControlService.ProviderTurnControlServiceV2Shape["interrupt"];
-  readonly terminal?: Partial<TerminalManager.TerminalManager["Service"]>;
   readonly rollback?: CheckpointRollbackService.CheckpointRollbackServiceV2Shape["execute"];
   readonly respond?: RuntimeRequestService.RuntimeRequestServiceV2["Service"]["respond"];
 }) {
@@ -159,14 +156,10 @@ function layerExecutorFor(input: {
       }),
     ),
   );
-  const dependenciesWithOptionalTerminal =
-    input.terminal === undefined
-      ? layerDependencies
-      : Layer.merge(layerDependencies, Layer.mock(TerminalManager.TerminalManager)(input.terminal));
   return EffectWorker.layerExecutor.pipe(
     Layer.provide(
       Layer.mergeAll(
-        dependenciesWithOptionalTerminal,
+        layerDependencies,
         Layer.mock(ThreadManagementService.ThreadManagementService)(input.threads ?? {}),
         ServerSettings.layerTest(
           input.continueAfterRestart === true ? { continueThreadsAfterServerUpdate: true } : {},
@@ -221,182 +214,6 @@ it.effect.each([
       });
     }).pipe(Effect.provide(layer));
     assert.deepEqual(yield* Ref.get(events), dispatched);
-  }),
-);
-
-it.effect("runs a settlement action in the workspace captured by its outbox item", () =>
-  Effect.gen(function* () {
-    const now = DateTime.formatIso(yield* DateTime.now);
-    const events = yield* Ref.make<ReadonlyArray<string>>([]);
-    const opened = yield* Ref.make<
-      Parameters<TerminalManager.TerminalManager["Service"]["open"]>[0] | null
-    >(null);
-    const written = yield* Ref.make<
-      Parameters<TerminalManager.TerminalManager["Service"]["write"]>[0] | null
-    >(null);
-    const effect: EffectOutbox.OrchestrationEffectV2 = {
-      id: "effect:thread-lifecycle:cleanup",
-      commandId: CommandId.make("command:thread-lifecycle:cleanup"),
-      threadId,
-      request: {
-        type: "thread-lifecycle.run",
-        trigger: "thread.settled",
-        actionId: "cleanup",
-        actionName: "Cleanup preview",
-        command: "pnpm cleanup-preview",
-        cwd: "/workspace/feature-worktree",
-        projectRoot: "/workspace/project",
-        worktreePath: "/workspace/feature-worktree",
-      },
-      status: "running",
-      attemptCount: 1,
-      availableAt: now,
-      leaseOwner: "test-worker",
-      createdAt: now,
-      updatedAt: now,
-      completedAt: null,
-      lastError: null,
-    };
-    const layer = layerExecutorFor({
-      events,
-      terminal: {
-        open: (input) => Ref.set(opened, input).pipe(Effect.as({} as never)),
-        write: (input) => Ref.set(written, input),
-      },
-      threads: {
-        getThreadProjection: () =>
-          Effect.succeed({
-            thread: { id: threadId, settledOverride: "settled" },
-          } as OrchestrationV2ThreadProjection),
-      },
-    });
-
-    yield* Effect.gen(function* () {
-      const executor = yield* EffectWorker.OrchestrationEffectExecutorV2;
-      yield* executor.execute(effect);
-    }).pipe(Effect.provide(layer));
-
-    assert.deepEqual(yield* Ref.get(opened), {
-      threadId,
-      terminalId: "hook-effect-thread-lifecycle-cleanup",
-      cwd: "/workspace/feature-worktree",
-      worktreePath: "/workspace/feature-worktree",
-      env: {
-        T3CODE_PROJECT_ROOT: "/workspace/project",
-        T3CODE_WORKTREE_PATH: "/workspace/feature-worktree",
-        NO_COLOR: "1",
-        FORCE_COLOR: "0",
-      },
-    });
-    assert.deepEqual(yield* Ref.get(written), {
-      threadId,
-      terminalId: "hook-effect-thread-lifecycle-cleanup",
-      data: "pnpm cleanup-preview\r",
-    });
-  }),
-);
-
-it.effect("skips a settlement action when the thread was re-engaged", () =>
-  Effect.gen(function* () {
-    const now = DateTime.formatIso(yield* DateTime.now);
-    const opened = yield* Ref.make<
-      Parameters<TerminalManager.TerminalManager["Service"]["open"]>[0] | null
-    >(null);
-    const effect: EffectOutbox.OrchestrationEffectV2 = {
-      id: "effect:thread-lifecycle:re-engaged",
-      commandId: CommandId.make("command:thread-lifecycle:re-engaged"),
-      threadId,
-      request: {
-        type: "thread-lifecycle.run",
-        trigger: "thread.settled",
-        actionId: "cleanup",
-        actionName: "Cleanup preview",
-        command: "pnpm cleanup-preview",
-        cwd: "/workspace/feature-worktree",
-        projectRoot: "/workspace/project",
-        worktreePath: "/workspace/feature-worktree",
-      },
-      status: "running",
-      attemptCount: 1,
-      availableAt: now,
-      leaseOwner: "test-worker",
-      createdAt: now,
-      updatedAt: now,
-      completedAt: null,
-      lastError: null,
-    };
-    const events = yield* Ref.make<ReadonlyArray<string>>([]);
-    const layer = layerExecutorFor({
-      events,
-      terminal: {
-        open: (input) => Ref.set(opened, input).pipe(Effect.as({} as never)),
-      },
-      threads: {
-        getThreadProjection: () =>
-          Effect.succeed({
-            thread: { id: threadId, settledOverride: "active" },
-          } as OrchestrationV2ThreadProjection),
-      },
-    });
-
-    yield* Effect.gen(function* () {
-      const executor = yield* EffectWorker.OrchestrationEffectExecutorV2;
-      yield* executor.execute(effect);
-    }).pipe(Effect.provide(layer));
-
-    assert.isNull(yield* Ref.get(opened));
-  }),
-);
-
-it.effect("skips a settlement action captured from a shared checkout", () =>
-  Effect.gen(function* () {
-    const now = DateTime.formatIso(yield* DateTime.now);
-    const opened = yield* Ref.make<
-      Parameters<TerminalManager.TerminalManager["Service"]["open"]>[0] | null
-    >(null);
-    const effect: EffectOutbox.OrchestrationEffectV2 = {
-      id: "effect:thread-lifecycle:shared-checkout",
-      commandId: CommandId.make("command:thread-lifecycle:shared-checkout"),
-      threadId,
-      request: {
-        type: "thread-lifecycle.run",
-        trigger: "thread.settled",
-        actionId: "cleanup",
-        actionName: "Cleanup preview",
-        command: "pnpm cleanup-preview",
-        cwd: "/workspace/project",
-        projectRoot: "/workspace/project",
-        worktreePath: null,
-      },
-      status: "running",
-      attemptCount: 1,
-      availableAt: now,
-      leaseOwner: "test-worker",
-      createdAt: now,
-      updatedAt: now,
-      completedAt: null,
-      lastError: null,
-    };
-    const events = yield* Ref.make<ReadonlyArray<string>>([]);
-    const layer = layerExecutorFor({
-      events,
-      terminal: {
-        open: (input) => Ref.set(opened, input).pipe(Effect.as({} as never)),
-      },
-      threads: {
-        getThreadProjection: () =>
-          Effect.succeed({
-            thread: { id: threadId, settledOverride: "settled" },
-          } as OrchestrationV2ThreadProjection),
-      },
-    });
-
-    yield* Effect.gen(function* () {
-      const executor = yield* EffectWorker.OrchestrationEffectExecutorV2;
-      yield* executor.execute(effect);
-    }).pipe(Effect.provide(layer));
-
-    assert.isNull(yield* Ref.get(opened));
   }),
 );
 

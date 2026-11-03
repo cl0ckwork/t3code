@@ -72,7 +72,6 @@ const input: NewProjectScriptInput = {
   runOnWorktreeCreate: false,
   waitForSetup: false,
   runOnSettle: false,
-  runOnThreadSettle: false,
   previewUrl: null,
   autoOpenPreview: false,
 };

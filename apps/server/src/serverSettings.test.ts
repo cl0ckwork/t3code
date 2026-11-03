@@ -1917,7 +1917,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         command: "npm test",
         icon: "play",
         runOnWorktreeCreate: false,
-        lifecycleTriggers: [],
       };
       const model = createModelSelection(ProviderInstanceId.make("codex"), "gpt-5.5");
       const encodeModelSelection = Schema.encodeEffect(Schema.fromJsonString(ModelSelection));

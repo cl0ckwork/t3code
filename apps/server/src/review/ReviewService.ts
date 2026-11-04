@@ -100,6 +100,9 @@ export const make = Effect.gen(function* () {
       ...(input.baseRef === undefined ? {} : { baseRef: input.baseRef }),
       ...(input.commitSha === undefined ? {} : { commitSha: input.commitSha }),
       ...(input.ignoreWhitespace === undefined ? {} : { ignoreWhitespace: input.ignoreWhitespace }),
+      ...(input.sourceKind === undefined ? {} : { sourceKind: input.sourceKind }),
+      ...(input.trackedOnly === undefined ? {} : { trackedOnly: input.trackedOnly }),
+      ...(input.metadataOnly === undefined ? {} : { metadataOnly: input.metadataOnly }),
       ...(input.file === undefined ? {} : { file: input.file }),
     };
 

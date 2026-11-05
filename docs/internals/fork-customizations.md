@@ -143,13 +143,14 @@ request, against `modelContextWindow`. Upstream shows that as a normal percentag
 correct until a compaction finishes. Between that compaction and the next request, the number
 still describes the pre-compaction transcript.
 
-The fork marks that window instead of hiding the percentage.
-[`contextWindow.ts`](../../apps/web/src/lib/contextWindow.ts) sets `compactedSinceReport` when the
-thread's latest completed `compaction` item is newer than the usage report. The rule is
-provider-neutral and needs no contract change: compaction items already reach the client.
-[`ContextWindowMeter.tsx`](../../apps/web/src/components/chat/ContextWindowMeter.tsx) mutes the
-ring and says the value predates the compaction, and the resume-compaction banner in `ChatView`
-does not offer to compact on a stale reading. Upstream's thread details context bar
+The fork marks that window instead of hiding the percentage. Upstream's shared
+[`contextWindow.ts`](../../packages/client-runtime/src/state/contextWindow.ts) sets
+`compactedSinceReport` when the thread's latest completed `compaction` item is newer than the usage
+report. The rule is provider-neutral and needs no contract change: compaction items already reach
+the client. [`ContextWindowMeter.tsx`](../../apps/web/src/components/chat/ContextWindowMeter.tsx)
+mutes the ring and says the value predates the compaction. Neither the resume-compaction banner in
+`ChatView` nor upstream's `shouldCompactBeforeSend` (mobile's compact-before-send) compacts again
+on a stale reading. Upstream's thread details context bar
 (`ThreadDetailsContext` in
 [`ThreadDetailsUsage.tsx`](../../apps/web/src/components/chat/ThreadDetailsUsage.tsx)) reads the
 same snapshot and carries the same note in its tooltip. Upstream's fill bar and auto-compaction

@@ -100,7 +100,9 @@ composer renders the matching workspace snapshot through the shared `providerSki
 Upstream's shared refresh atom family in
 [`providerSkills.ts`](../../packages/client-runtime/src/providerSkills.ts) is keyed by project and
 thread here, and an on-demand refresh reply carries only the snapshot for the server-resolved path;
-the client records it under that reply's `cwd`, never a path it sent.
+the client records it under that reply's `cwd`, never a path it sent. Upstream's pending-catalog
+fallback for a failed scan (`workspaceSnapshotOrCatalog` in `ws.ts`) is fed the server-resolved
+path too.
 
 This is a trust boundary, not a client-side convenience. A thread must belong to the supplied
 project, a deleted project or thread fails the refresh, and a forged path cannot cause the server

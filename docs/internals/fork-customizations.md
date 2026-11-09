@@ -149,18 +149,16 @@ The fork marks that window instead of hiding the percentage. Upstream's shared
 [`contextWindow.ts`](../../packages/client-runtime/src/state/contextWindow.ts) sets
 `compactedSinceReport` when the thread's latest completed `compaction` item is newer than the usage
 report. The rule is provider-neutral and needs no contract change: compaction items already reach
-the client. [`ContextWindowMeter.tsx`](../../apps/web/src/components/chat/ContextWindowMeter.tsx)
-mutes the ring and says the value predates the compaction. Neither the resume-compaction banner in
-`ChatView` nor upstream's `shouldCompactBeforeSend` (mobile's compact-before-send) compacts again
-on a stale reading. Upstream's thread details context bar
-(`ThreadDetailsContext` in
-[`ThreadDetailsUsage.tsx`](../../apps/web/src/components/chat/ThreadDetailsUsage.tsx)) reads the
-same snapshot and carries the same note in its tooltip. Upstream's fill bar and auto-compaction
-tick show where compaction will happen, not whether the reading predates one, so they do not
-replace this mark. The next usage report clears the mark.
+the client. Upstream's thread details context bar (`ThreadDetailsContext` in
+[`ThreadDetailsUsage.tsx`](../../apps/web/src/components/chat/ThreadDetailsUsage.tsx)) says in its
+tooltip that the value predates the compaction. Neither the resume-compaction banner in `ChatView`
+nor upstream's `shouldCompactBeforeSend` (mobile's compact-before-send) compacts again on a stale
+reading. Upstream's fill bar and auto-compaction tick show where compaction will happen, not
+whether the reading predates one, so they do not replace this mark. The next usage report clears
+the mark.
 
-The upstream `contextWindowMeterEnabled` toggle (Settings, Labs, Legacy) still controls whether
-the meter shows. Drop this section's code if upstream starts reporting post-compaction context.
+Upstream removed the composer context meter and its Labs toggle, so the fork's muted-ring variant
+went with it. Drop this section's code if upstream starts reporting post-compaction context.
 
 ## Sidebar grouping and ordering
 

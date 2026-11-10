@@ -262,6 +262,11 @@ chart, table, diagram, pseudocode, or mockup unasked when it says more than pros
 section below Codex's 4,000-byte entry limit. Drop these lines if upstream adopts equivalent
 proactive guidance.
 
+Claude Code defers T3's MCP tools behind ToolSearch, and Claude agents seldom loaded the html tools
+on their own. `T3_CODE_HTML_TOOL_SEARCH_INSTRUCTIONS` gives Claude the exact `select:` query for
+`html_preview` and `html_render`, the same way upstream does for device tools. It is Claude-only;
+Codex does not defer tools. Drop it if upstream adds an equivalent load hint or stops deferring them.
+
 ## Daily desktop launcher
 
 `vp run desktop:daily` is a production-style local launcher for this fork. It builds the desktop

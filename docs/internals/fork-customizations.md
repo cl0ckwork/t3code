@@ -25,7 +25,8 @@ retried against the server cwd and rendered an unrelated or empty diff.
 The review RPC now accepts only a `threadId`. [`ReviewService.ts`](../../apps/server/src/review/ReviewService.ts)
 uses persisted projection data to resolve `thread.worktreePath ?? project.workspaceRoot`; the
 VCS receives that derived path only after resolution. Preview requests, upstream's local-commit
-list and per-commit previews, and lazy full-file expansion share this boundary. Web and mobile
+list and per-commit previews, the Git actions Changes row totals, and lazy full-file expansion
+share this boundary. Web and mobile
 send the selected thread id, and the web diff panel does not contain a fallback query against the
 server cwd.
 
@@ -101,8 +102,8 @@ Upstream's shared refresh atom family in
 [`providerSkills.ts`](../../packages/client-runtime/src/providerSkills.ts) is keyed by project and
 thread here, and an on-demand refresh reply carries only the snapshot for the server-resolved path;
 the client records it under that reply's `cwd`, never a path it sent. Upstream's pending-catalog
-fallback for a failed scan (`workspaceSnapshotOrCatalog` in `ws.ts`) is fed the server-resolved
-path too.
+fallback for a failed scan (`workspaceSnapshotOrCatalog` in `ws.ts`) and its removed-worktree scan
+fallback (`ProjectService.workspaceScanDirectory`) are fed the server-resolved path too.
 
 This is a trust boundary, not a client-side convenience. A thread must belong to the supplied
 project, a deleted project or thread fails the refresh, and a forged path cannot cause the server

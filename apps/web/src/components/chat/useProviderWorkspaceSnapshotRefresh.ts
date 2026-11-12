@@ -19,6 +19,13 @@ const providerWorkspaceSnapshotRefresh = createProviderWorkspaceSnapshotRefreshA
   refreshProviders: serverEnvironment.refreshProviders,
 });
 
+/** The persisted workspace a picker scans; the server resolves its path from these ids. */
+export interface ProviderWorkspaceScope {
+  readonly cwd: string;
+  readonly projectId: ProjectId;
+  readonly threadId: ThreadId | null;
+}
+
 const idleRefreshAtom: Atom.Atom<ProviderWorkspaceSnapshotRefreshState | undefined> = Atom.make<
   ProviderWorkspaceSnapshotRefreshState | undefined
 >(undefined).pipe(Atom.withLabel("provider-workspace-snapshot-refresh:idle"));
@@ -29,7 +36,7 @@ const idleRefreshAtom: Atom.Atom<ProviderWorkspaceSnapshotRefreshState | undefin
  * and whether the workspace's skills are still being scanned.
  */
 export function useProviderWorkspaceSnapshotRefresh(input: {
-  readonly environmentId: EnvironmentId;
+  readonly environmentId: EnvironmentId | null;
   readonly gitCwd: string | null;
   readonly workspaceProjectId: ProjectId | null;
   readonly activeThreadId: ThreadId | null;
@@ -37,7 +44,7 @@ export function useProviderWorkspaceSnapshotRefresh(input: {
 }): { readonly refresh: () => void; readonly scanning: boolean } {
   const { environmentId, gitCwd, workspaceProjectId, activeThreadId, instanceId } = input;
   const atom =
-    gitCwd && workspaceProjectId && instanceId
+    environmentId && gitCwd && workspaceProjectId && instanceId
       ? providerWorkspaceSnapshotRefresh({
           environmentId,
           instanceId,

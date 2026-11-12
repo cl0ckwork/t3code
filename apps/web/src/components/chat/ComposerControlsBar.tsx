@@ -30,6 +30,7 @@ import {
 } from "./ComposerModelEffort";
 import type { useComposerProviderModel } from "./useComposerProviderModel";
 import { resolveComposerControlsOwnership } from "./composerControlsOwnership";
+import type { ProviderWorkspaceScope } from "./useProviderWorkspaceSnapshotRefresh";
 
 /**
  * The composer footer controls: the model picker (which also holds effort, speed and
@@ -41,6 +42,7 @@ const MODEL_TRIGGER_STATES = "data-popup-open:bg-accent data-popup-open:text-for
 
 export function ComposerControlsBar(props: {
   environmentId: EnvironmentId;
+  workspace: ProviderWorkspaceScope | null;
   routeKind: ChatComposerProps["routeKind"];
   routeThreadRef: ChatComposerProps["routeThreadRef"];
   draftId: ChatComposerProps["draftId"];
@@ -183,6 +185,7 @@ export function ComposerControlsBar(props: {
   const composerModelPicker = (
     <ComposerModelPicker
       environmentId={environmentId}
+      workspace={props.workspace}
       compact={false}
       isComposerOwned
       // The trigger grows away from this edge when its model or effort label changes.

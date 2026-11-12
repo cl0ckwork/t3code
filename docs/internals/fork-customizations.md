@@ -103,7 +103,9 @@ Upstream's shared refresh atom family in
 thread here, and an on-demand refresh reply carries only the snapshot for the server-resolved path;
 the client records it under that reply's `cwd`, never a path it sent. Upstream's pending-catalog
 fallback for a failed scan (`workspaceSnapshotOrCatalog` in `ws.ts`) and its removed-worktree scan
-fallback (`ProjectService.workspaceScanDirectory`) are fed the server-resolved path too.
+fallback (`ProjectService.workspaceScanDirectory`) are fed the server-resolved path too. Upstream's
+workspace-scoped model scans (the web model picker and the mobile thread settings sheet) and its
+machine-catalog reply use the same project/thread request.
 
 This is a trust boundary, not a client-side convenience. A thread must belong to the supplied
 project, a deleted project or thread fails the refresh, and a forged path cannot cause the server

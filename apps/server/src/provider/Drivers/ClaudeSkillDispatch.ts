@@ -20,12 +20,14 @@ export interface ClaudeSkillDispatch {
 export function planClaudeSkillDispatch(
   prompt: string,
   skills: ReadonlyMap<string, ClaudeSkillTarget>,
+  /** Mentions before this offset, such as inline handoff history, stay plain text. */
+  mentionsFrom = 0,
 ): ClaudeSkillDispatch | undefined {
   // The composer treats Markdown code as literal. Appending a delimiter makes
   // a final `$skill` visible to that same parser without changing its range in
   // the source prompt.
   const mentions = collectComposerInlineTokens(`${prompt} `).flatMap((token) => {
-    if (token.type !== "skill") return [];
+    if (token.type !== "skill" || token.start < mentionsFrom) return [];
     const skill = skills.get(token.value);
     return skill ? [{ name: token.value, skill, start: token.start, end: token.end }] : [];
   });

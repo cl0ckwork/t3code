@@ -124,6 +124,11 @@ query PullRequestCore(
           }
         }
       }
+      isInMergeQueue
+      mergeQueueEntry {
+        state
+        position
+      }
       viewerCanUpdate
       viewerDidAuthor
       viewerCanUpdateBranch
@@ -619,6 +624,7 @@ query PullRequestActionState($owner: String!, $name: String!, $number: Int!, $he
       id
       headRefOid
       isMergeQueueEnabled
+      isInMergeQueue
       mergeStateStatus
       baseRef {
         compare(headRef: $headRef) {

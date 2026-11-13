@@ -87,6 +87,7 @@ export function PullRequestActionsMenu({
   onActingEnvironmentChange,
   can,
   autoMergeArmed,
+  mergeQueued,
   showsDraftToggle,
   showsMergeNow,
   showsAutoMerge,
@@ -141,6 +142,7 @@ export function PullRequestActionsMenu({
   onActingEnvironmentChange: (environmentId: EnvironmentId) => void;
   can: (action: PullRequestAction) => boolean;
   autoMergeArmed: boolean;
+  mergeQueued: boolean;
   showsDraftToggle: boolean;
   showsMergeNow: boolean;
   showsAutoMerge: boolean;
@@ -353,7 +355,7 @@ export function PullRequestActionsMenu({
             {autoMergeArmed && can("disable-auto-merge") ? (
               <MenuItem disabled={actionPending} onClick={() => void perform("disable-auto-merge")}>
                 <PullRequestGlyph.merged className="size-3.5" />
-                Disable auto-merge
+                {mergeQueued ? "Remove from queue" : "Disable auto-merge"}
               </MenuItem>
             ) : showsAutoMerge ? (
               <MenuItem

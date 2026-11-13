@@ -255,6 +255,18 @@ The mechanism is intentionally local to the detail panel:
 Do not turn an automatic read into a code refresh. A stale toast is scoped to its PR and closes
 when the reader navigates away, so it cannot refresh a different PR later.
 
+## Merge-queue status (temporary backport)
+
+A GitHub pull request in the merge queue showed "Squash and merge" because T3 never read
+`isInMergeQueue`. The fork carries upstream PR
+[#34085](https://github.com/pingdotgg/t3code/pull/34085) unchanged: the PR detail reads
+`mergeQueueEntry`, web and mobile show the pull request as queued, and "Remove from queue" dequeues it.
+It sits beside upstream's `mergeQueueRemoval` read, which is a different fact (the queue dropped
+the pull request).
+
+When #34085 merges, take upstream's version and delete this section. If it closes unmerged, keep
+the code and say so here.
+
 ## Agent orchestration instructions
 
 [`orchestrationInstructions.ts`](../../packages/provider-core/src/server/orchestrationInstructions.ts)

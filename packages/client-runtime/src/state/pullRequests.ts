@@ -532,7 +532,11 @@ export function createPullRequestEnvironmentAtoms<R, E>(
             ]),
           };
           if (reply.autoMergeEnabled !== false) return patched;
-          const { autoMergeMethod: _disarmed, ...withoutAutoMerge } = patched;
+          const {
+            autoMergeMethod: _disarmed,
+            mergeQueue: _dequeued,
+            ...withoutAutoMerge
+          } = patched;
           return withoutAutoMerge;
         },
       },

@@ -635,6 +635,12 @@ export const PullRequestMergeQueueRemoval = Schema.Struct({
 });
 export type PullRequestMergeQueueRemoval = typeof PullRequestMergeQueueRemoval.Type;
 
+export const PullRequestMergeQueueEntry = Schema.Struct({
+  state: Schema.Literals(["queued", "awaiting-checks", "mergeable", "unmergeable", "locked"]),
+  position: NonNegativeInt,
+});
+export type PullRequestMergeQueueEntry = typeof PullRequestMergeQueueEntry.Type;
+
 export const PullRequestDetail = Schema.Struct({
   provider: SourceControlProviderKind,
   capabilities: PullRequestCapabilities,
@@ -673,6 +679,8 @@ export const PullRequestDetail = Schema.Struct({
   /** Absent means the host does not report auto-merge state, not that it is off. */
   autoMergeEnabled: Schema.optional(Schema.Boolean),
   autoMergeMethod: Schema.optional(PullRequestMergeMethod),
+  /** Set while the pull request waits in the host's merge queue; it also counts as auto-merge. */
+  mergeQueue: Schema.optional(PullRequestMergeQueueEntry),
   workflowApprovalsRequired: Schema.optional(NonNegativeInt),
   /** Absent where the host has no merge queue or does not report one. */
   mergeQueueRemoval: Schema.optional(PullRequestMergeQueueRemoval),

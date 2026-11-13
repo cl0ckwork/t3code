@@ -1910,6 +1910,9 @@ export const make = Effect.gen(function* () {
             ...(changeRequest.autoMergeMethod === undefined
               ? {}
               : { autoMergeMethod: changeRequest.autoMergeMethod }),
+            ...(changeRequest.mergeQueue === undefined
+              ? {}
+              : { mergeQueue: changeRequest.mergeQueue }),
             ...(changeRequest.maintainerCanModify === undefined
               ? {}
               : { maintainerCanModify: changeRequest.maintainerCanModify }),

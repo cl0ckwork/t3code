@@ -143,13 +143,7 @@ export function useReviewDiffData(input: {
       });
   const registry = useContext(RegistryContext);
   const { environmentId } = input;
-  const scope = JSON.stringify([
-    environmentId,
-    threadId,
-    source?.kind,
-    source?.baseRef,
-    source?.diffHash,
-  ]);
+  const scope = JSON.stringify([environmentId, threadId, lazySource?.kind, source?.baseRef]);
   const [requested, setRequested] = useState({ scope, indices: [0, 1, 2] });
   const indices = useMemo(
     () => new Set(requested.scope === scope ? requested.indices : [0, 1, 2]),

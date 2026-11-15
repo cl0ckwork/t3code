@@ -229,6 +229,7 @@ describe("workspace skill discovery", () => {
       hasThread: false,
       hasCompactableConversation: false,
       onChangeDraftMessage: () => {},
+      onOpenModelPicker: () => {},
     });
     return null;
   }

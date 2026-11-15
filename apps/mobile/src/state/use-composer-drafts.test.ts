@@ -28,6 +28,9 @@ import {
 } from "@t3tools/contracts";
 import { onTestFinished, vi } from "vite-plus/test";
 
+import { buildIncomingShareDraft } from "../features/sharing/incoming-share-model";
+import { composerContextSendBlockReason } from "../lib/composerContext";
+
 const composerDraftFileMocks = vi.hoisted(() => {
   let document = JSON.stringify({ schemaVersion: 1, drafts: {} });
   let readError: Error | null = null;
@@ -802,6 +805,32 @@ describe("mobile composer drafts", () => {
     expect(getComposerDraftSnapshot(key).text).toBe("keep newly typed text pasted");
   });
 
+  it("keeps a pending paste before text typed at its caret, and the caret after that text", async () => {
+    const key = "environment-1:typing-at-paste-point";
+    const image = {
+      id: "image",
+      type: "file" as const,
+      name: "picture.png",
+      mimeType: "text/plain",
+      sizeBytes: 4,
+      fileUri: "file:///picture.png",
+    };
+    setComposerDraftText(key, "Before ");
+    const insertion = captureComposerDraftInsertion(key, { start: 7, end: 7 });
+    const write = Promise.withResolvers<void>();
+    const pending = write.promise.then(() =>
+      appendComposerDraftAttachments(key, [image], { appendReference: true, insertion }),
+    );
+    setComposerDraftText(key, "Before yaz");
+    rememberComposerDraftSelection(key, "Before yaz", { start: 10, end: 10 });
+    write.resolve();
+    expect(await pending).toBe(0);
+    const link = "[picture.png](t3-context://v1/file/image)";
+    expect(getComposerDraftSnapshot(key).text).toBe(`Before ${link} yaz`);
+    const caret = `Before ${link} yaz`.length;
+    expect(captureComposerDraftInsertion(key)).toMatchObject({ start: caret, end: caret });
+  });
+
   it.each(["attachment", "context", "imported context"])(
     "releases a selected file when replaced by %s",
     async (kind) => {
@@ -1091,6 +1120,26 @@ describe("mobile composer drafts", () => {
 
     appendComposerDraftAttachments(draftKey, [makeVideo("restored")], { restore: true });
     expect(appAtomRegistry.get(composerDraftsAtom)[draftKey]?.attachments).toHaveLength(2);
+
+    // Every native paste is named pasted-image.png, so only the bytes tell two pastes apart.
+    const makePaste = (id: string, base64: string) => ({
+      id,
+      type: "image" as const,
+      name: "pasted-image.png",
+      mimeType: "image/png",
+      sizeBytes: 3,
+      dataUrl: `data:image/png;base64,${base64}`,
+      previewUri: `data:image/png;base64,${base64}`,
+    });
+    const pasteKey = "new-task:environment-1:project-pastes";
+    appendComposerDraftAttachments(pasteKey, [makePaste("red", "AQID")]);
+    appendComposerDraftAttachments(pasteKey, [
+      makePaste("blue", "BAUG"),
+      makePaste("red-2", "AQID"),
+    ]);
+    expect(
+      appAtomRegistry.get(composerDraftsAtom)[pasteKey]?.attachments.map(({ id }) => id),
+    ).toEqual(["red", "blue"]);
   });
 
   it("keeps shared attachment files until every draft releases them", async () => {
@@ -2236,7 +2285,7 @@ describe("mobile composer drafts", () => {
   it("merges shared content into a project draft without duplicating retries", () => {
     const draftKey = "new-task:environment-1:project-1";
     const sharedAttachment = {
-      id: "share-1:image:0",
+      id: "share-1-image-0",
       type: "image" as const,
       name: "Screenshot.png",
       mimeType: "image/png",
@@ -2271,7 +2320,7 @@ describe("mobile composer drafts", () => {
   it("shows a shared non-image file as a composer chip", () => {
     const draftKey = "new-task:environment-1:project-1";
     const sharedFile = {
-      id: "share-1:file:0",
+      id: "share-1-file-0",
       type: "file" as const,
       name: "backup.json",
       mimeType: "application/json",
@@ -2304,6 +2353,37 @@ describe("mobile composer drafts", () => {
     const once = mergeComposerDraftContentState({}, draftKey, recovered);
     expect(once[draftKey]?.text).toBe("Retry this");
     expect(mergeComposerDraftContentState(once, draftKey, recovered)).toBe(once);
+  });
+
+  it("lets a shared file through the send check", async () => {
+    const { attachments } = await buildIncomingShareDraft({
+      id: "share-1",
+      createdAt: "2026-07-15T10:00:00.000Z",
+      payloads: [
+        {
+          shareType: "file",
+          value: "file:///shared/report.xlsx",
+          mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          originalName: "report.xlsx",
+        },
+      ],
+      resolvedPayloads: [],
+      fileReader: {
+        readBase64: async () => "",
+        readSize: async () => 42,
+        removeOwnedFile: async () => {},
+      },
+    });
+    const draftKey = "new-task:environment-1:project-1";
+
+    const merged = mergeComposerDraftContentState({}, draftKey, {
+      text: "",
+      attachments,
+      sourceShareId: "share-1",
+    })[draftKey]!;
+
+    expect(merged.context?.records).toHaveLength(1);
+    expect(composerContextSendBlockReason(merged.context)).toBeNull();
   });
 
   it("preserves existing images when shared content exceeds the draft attachment limit", () => {

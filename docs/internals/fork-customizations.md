@@ -14,6 +14,10 @@ After a rebase, start with focused tests beside the changed behavior, then exerc
 UI manually. Use two projects or worktrees for workspace-scoped behavior; a one-project smoke test
 cannot reveal cross-project leakage.
 
+Upstream translates every user-facing string (`docs/internals/i18n.md`). Fork copy follows the same
+rule: wrap it in `gt()`, `<T>`, or `m(msg())`, run `vp run i18n:generate` in `apps/web` and
+`apps/mobile`, and fill the new keys in every locale catalog. `vp run i18n:check` gates it.
+
 ## Thread-scoped live diffs
 
 Live working-tree and branch diffs belong to the thread's workspace, not the T3 server's launch

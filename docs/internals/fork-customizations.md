@@ -152,7 +152,10 @@ request, against `modelContextWindow`. Upstream shows that as a normal percentag
 correct until a compaction finishes. Between that compaction and the next request, the number
 still describes the pre-compaction transcript.
 
-The fork marks that window instead of hiding the percentage. Upstream's shared
+Upstream now replaces a pre-compaction report with the compaction's own `afterTokenCount` when
+the compaction carries one (Claude, Pi, OpenCode), and hides the reading when it does not. Codex
+compactions carry no count, so for Codex the fork marks that window instead of hiding the
+percentage. Upstream's shared
 [`contextWindow.ts`](../../packages/client-runtime/src/state/contextWindow.ts) sets
 `compactedSinceReport` when the thread's latest completed `compaction` item is newer than the usage
 report. The rule is provider-neutral and needs no contract change: compaction items already reach
@@ -165,7 +168,8 @@ whether the reading predates one, so they do not replace this mark. The next usa
 the mark.
 
 Upstream removed the composer context meter and its Labs toggle, so the fork's muted-ring variant
-went with it. Drop this section's code if upstream starts reporting post-compaction context.
+went with it. Drop this section's code if Codex starts reporting post-compaction context, or if we accept
+upstream's choice to hide the reading until the next report.
 
 ## Sidebar grouping and ordering
 

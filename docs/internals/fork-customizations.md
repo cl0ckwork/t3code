@@ -37,9 +37,17 @@ server cwd.
 Upstream now accepts a client `cwd` inside the server root or any known workspace. That fixes the
 common worktree rejection but still lets a client choose the path, so the fork keeps `threadId`.
 
+Upstream's multi-repository projects let the Diff panel and the Git actions Changes row pick one
+of the thread's repositories. Those requests add an optional `repositoryCwd`, and
+`ReviewService.resolveThreadWorkspace` accepts it only inside the thread workspace, the project
+root, a project tracked folder, or the thread's task folder root. Anything else fails with
+`outside-workspace` before VCS detection. A checkpoint scope left behind by a moved thread is
+outside those roots, so it gets that error rather than a diff.
+
 Keep these invariants on rebase:
 
-- A client cannot choose an arbitrary filesystem path for live-diff preview or expansion.
+- A client cannot choose an arbitrary filesystem path for live-diff preview or expansion; a
+  selected repository must sit inside one of the thread's own roots.
 - An active worktree thread reads its own worktree; an in-place thread reads its project root.
 - A missing or unreadable thread returns a typed workspace error. It must not silently diff a
   different repository.

@@ -44,6 +44,7 @@ export function useReviewFilePatches({
   const scope = JSON.stringify([
     environmentId,
     threadId,
+    previewInput?.repositoryCwd,
     source?.kind,
     source?.baseRef,
     source?.headRef,
@@ -200,8 +201,12 @@ function reviewFileQueries({
                 ...(previewInput ? { preview: previewInput } : {}),
                 request: {
                   threadId,
+                  ...(previewInput?.repositoryCwd
+                    ? { repositoryCwd: previewInput.repositoryCwd }
+                    : {}),
                   ...(baseRef ? { baseRef } : {}),
                   ...(source.kind === "commit" ? { commitSha: source.id } : {}),
+                  ...(source.mergeBase ? { mergeBase: source.mergeBase } : {}),
                   ignoreWhitespace,
                   file: {
                     path: file.path,

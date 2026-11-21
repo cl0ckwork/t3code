@@ -1,8 +1,10 @@
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 
 import {
   ReviewWorkspaceUnavailableError,
@@ -23,6 +25,8 @@ import * as ProjectStoreV2 from "../orchestration-v2/ProjectStore.ts";
 import * as ProjectionStoreV2 from "../orchestration-v2/ProjectionStore.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
+import { isWithinRoot } from "../workspace/KnownWorkspaces.ts";
+import * as TaskFolders from "../workspace/TaskFolders.ts";
 
 export class ReviewService extends Context.Service<
   ReviewService,
@@ -45,7 +49,13 @@ export const make = Effect.gen(function* () {
   const projectionStore = yield* ProjectionStoreV2.ProjectionStoreV2;
   const vcsRegistry = yield* VcsDriverRegistry.VcsDriverRegistry;
   const git = yield* GitVcsDriver.GitVcsDriver;
-  const resolveThreadWorkspace = Effect.fn("ReviewService.resolveThreadWorkspace")(function* (
+  const taskFolders = yield* TaskFolders.TaskFolders;
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const realPath = (value: string) =>
+    fileSystem.realPath(path.resolve(value)).pipe(Effect.orElseSucceed(() => path.resolve(value)));
+
+  const resolveThreadContext = Effect.fn("ReviewService.resolveThreadContext")(function* (
     threadId: ReviewDiffPreviewRequest["threadId"],
   ) {
     const projection = yield* projectionStore
@@ -67,13 +77,42 @@ export const make = Effect.gen(function* () {
     if (Option.isNone(project)) {
       return yield* new ReviewWorkspaceUnavailableError({ threadId, reason: "unavailable" });
     }
-    return projection.thread.worktreePath ?? project.value.workspaceRoot;
+    return {
+      workspace: projection.thread.worktreePath ?? project.value.workspaceRoot,
+      worktreePath: projection.thread.worktreePath ?? null,
+      project: project.value,
+    };
+  });
+
+  // A multi-repository project lets the client pick a repository, but only one of this thread's:
+  // inside its workspace, its project's folders, or its task folder.
+  const resolveThreadWorkspace = Effect.fn("ReviewService.resolveThreadWorkspace")(function* (
+    threadId: ReviewDiffPreviewRequest["threadId"],
+    repositoryCwd?: string,
+  ) {
+    const context = yield* resolveThreadContext(threadId);
+    if (repositoryCwd === undefined) return context.workspace;
+    const taskFolder =
+      context.worktreePath === null
+        ? null
+        : yield* taskFolders.find(context.worktreePath).pipe(Effect.orElseSucceed(() => null));
+    const roots = [
+      context.workspace,
+      context.project.workspaceRoot,
+      ...(context.project.trackedFolders ?? []).map((folder) => folder.path),
+      ...(taskFolder === null ? [] : [taskFolder.root]),
+    ];
+    const candidate = yield* realPath(repositoryCwd);
+    for (const root of roots) {
+      if (isWithinRoot(path, candidate, yield* realPath(root))) return path.resolve(repositoryCwd);
+    }
+    return yield* new ReviewWorkspaceUnavailableError({ threadId, reason: "outside-workspace" });
   });
 
   const getBranchCommits: ReviewService["Service"]["getBranchCommits"] = Effect.fn(
     "ReviewService.getBranchCommits",
   )(function* (input) {
-    const cwd = yield* resolveThreadWorkspace(input.threadId);
+    const cwd = yield* resolveThreadWorkspace(input.threadId, input.repositoryCwd);
     const driverInput: ReviewBranchCommitsInput = {
       cwd,
       ...(input.baseRef === undefined ? {} : { baseRef: input.baseRef }),
@@ -94,14 +133,16 @@ export const make = Effect.gen(function* () {
   const getDiffPreview: ReviewService["Service"]["getDiffPreview"] = Effect.fn(
     "ReviewService.getDiffPreview",
   )(function* (input) {
-    const cwd = yield* resolveThreadWorkspace(input.threadId);
+    const cwd = yield* resolveThreadWorkspace(input.threadId, input.repositoryCwd);
     const driverInput: ReviewDiffPreviewInput = {
       cwd,
       ...(input.baseRef === undefined ? {} : { baseRef: input.baseRef }),
+      ...(input.mergeBase === undefined ? {} : { mergeBase: input.mergeBase }),
       ...(input.commitSha === undefined ? {} : { commitSha: input.commitSha }),
       ...(input.ignoreWhitespace === undefined ? {} : { ignoreWhitespace: input.ignoreWhitespace }),
       ...(input.sourceKind === undefined ? {} : { sourceKind: input.sourceKind }),
       ...(input.trackedOnly === undefined ? {} : { trackedOnly: input.trackedOnly }),
+      ...(input.completionToken === undefined ? {} : { completionToken: input.completionToken }),
       ...(input.metadataOnly === undefined ? {} : { metadataOnly: input.metadataOnly }),
       ...(input.file === undefined ? {} : { file: input.file }),
     };
@@ -121,7 +162,7 @@ export const make = Effect.gen(function* () {
   const getDiffFileContents: ReviewService["Service"]["getDiffFileContents"] = Effect.fn(
     "ReviewService.getDiffFileContents",
   )(function* (input) {
-    const cwd = yield* resolveThreadWorkspace(input.threadId);
+    const cwd = yield* resolveThreadWorkspace(input.threadId, input.repositoryCwd);
     const driverInput: ReviewDiffFileContentsInput = {
       cwd,
       sourceKind: input.sourceKind,

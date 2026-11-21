@@ -3,6 +3,11 @@ import { ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { GitCommandError } from "./git.ts";
 import { VcsError } from "./vcs.ts";
 
+// An object id or HEAD, never an option-looking ref, since it is passed to git as a revision.
+const ReviewMergeBase = Schema.String.check(
+  Schema.isPattern(/^(?:[0-9a-f]{40}|[0-9a-f]{64}|HEAD)$/),
+);
+
 export const ReviewDiffPreviewSourceKind = Schema.Literals([
   "working-tree",
   "branch-range",
@@ -23,11 +28,18 @@ export type ReviewDiffPreviewFile = typeof ReviewDiffPreviewFile.Type;
 
 export const ReviewDiffPreviewRequest = Schema.Struct({
   threadId: ThreadId,
+  /**
+   * One of the thread's repositories, for a project that covers several. The server accepts it
+   * only inside the thread's workspace, its project's folders, or its task folder.
+   */
+  repositoryCwd: Schema.optionalKey(TrimmedNonEmptyString),
   baseRef: Schema.optional(TrimmedNonEmptyString),
+  mergeBase: Schema.optionalKey(ReviewMergeBase),
   commitSha: Schema.optional(TrimmedNonEmptyString),
   ignoreWhitespace: Schema.optionalKey(Schema.Boolean),
   sourceKind: Schema.optionalKey(Schema.Literals(["working-tree", "branch-range"])),
   trackedOnly: Schema.optionalKey(Schema.Boolean),
+  completionToken: Schema.optionalKey(Schema.String),
   metadataOnly: Schema.optionalKey(Schema.Boolean),
   file: Schema.optionalKey(ReviewDiffPreviewFile),
 });
@@ -37,10 +49,14 @@ export type ReviewDiffPreviewRequest = typeof ReviewDiffPreviewRequest.Type;
 export const ReviewDiffPreviewInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
   baseRef: Schema.optional(TrimmedNonEmptyString),
+  // A branch-range file read reuses its preview's merge base instead of resolving it again.
+  mergeBase: Schema.optionalKey(ReviewMergeBase),
   commitSha: Schema.optional(TrimmedNonEmptyString),
   ignoreWhitespace: Schema.optionalKey(Schema.Boolean),
   sourceKind: Schema.optionalKey(Schema.Literals(["working-tree", "branch-range"])),
   trackedOnly: Schema.optionalKey(Schema.Boolean),
+  /** From a trackedOnly result, so the complete read adds only the untracked files. */
+  completionToken: Schema.optionalKey(Schema.String),
   metadataOnly: Schema.optionalKey(Schema.Boolean),
   file: Schema.optionalKey(ReviewDiffPreviewFile),
 });
@@ -49,6 +65,7 @@ export type ReviewDiffPreviewInput = typeof ReviewDiffPreviewInput.Type;
 /** Client request for the thread workspace's branch commits. */
 export const ReviewBranchCommitsRequest = Schema.Struct({
   threadId: ThreadId,
+  repositoryCwd: Schema.optionalKey(TrimmedNonEmptyString),
   baseRef: Schema.optional(TrimmedNonEmptyString),
 });
 export type ReviewBranchCommitsRequest = typeof ReviewBranchCommitsRequest.Type;
@@ -98,6 +115,8 @@ export const ReviewDiffPreviewSource = Schema.Struct({
   commitSubject: Schema.optionalKey(TrimmedNonEmptyString),
   baseRef: Schema.NullOr(TrimmedNonEmptyString),
   headRef: Schema.NullOr(TrimmedNonEmptyString),
+  // Branch-range only; older servers omit it.
+  mergeBase: Schema.optionalKey(ReviewMergeBase),
   diff: Schema.String,
   diffHash: TrimmedNonEmptyString,
   truncated: Schema.Boolean,
@@ -109,6 +128,7 @@ export type ReviewDiffPreviewSource = typeof ReviewDiffPreviewSource.Type;
 /** Client request to expand a file in a live diff. */
 export const ReviewDiffFileContentsRequest = Schema.Struct({
   threadId: ThreadId,
+  repositoryCwd: Schema.optionalKey(TrimmedNonEmptyString),
   sourceKind: ReviewDiffPreviewSourceKind,
   changeType: ReviewDiffChangeType,
   baseRef: Schema.NullOr(TrimmedNonEmptyString),
@@ -141,6 +161,7 @@ export const ReviewDiffPreviewResult = Schema.Struct({
   generatedAt: Schema.DateTimeUtc,
   sources: Schema.Array(ReviewDiffPreviewSource),
   incomplete: Schema.optionalKey(Schema.Boolean),
+  completionToken: Schema.optionalKey(Schema.String),
 });
 export type ReviewDiffPreviewResult = typeof ReviewDiffPreviewResult.Type;
 
@@ -148,13 +169,18 @@ export class ReviewWorkspaceUnavailableError extends Schema.TaggedError<ReviewWo
   "ReviewWorkspaceUnavailableError",
   {
     threadId: ThreadId,
-    reason: Schema.Literals(["not-found", "unavailable"]),
+    reason: Schema.Literals(["not-found", "unavailable", "outside-workspace"]),
   },
 ) {
   override get message(): string {
-    return this.reason === "not-found"
-      ? `Cannot load a diff because thread '${this.threadId}' no longer exists.`
-      : `Cannot resolve the workspace for thread '${this.threadId}'.`;
+    switch (this.reason) {
+      case "not-found":
+        return `Cannot load a diff because thread '${this.threadId}' no longer exists.`;
+      case "outside-workspace":
+        return `Cannot load a diff outside the repositories of thread '${this.threadId}'.`;
+      default:
+        return `Cannot resolve the workspace for thread '${this.threadId}'.`;
+    }
   }
 }
 

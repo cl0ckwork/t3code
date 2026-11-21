@@ -239,6 +239,37 @@ describe("CodexAdapterV2 runtime policy", () => {
     }),
   );
 
+  it.effect("grants a multi-folder thread's other folders only to a writable sandbox", () =>
+    Effect.gen(function* () {
+      const workspace = {
+        folders: [{ name: "api", path: "/work/api", isGitRepository: true }],
+        extraRoots: ["/work/api"],
+      };
+      const build = (runtimeMode: "approval-required" | "auto-accept-edits" | "full-access") =>
+        CodexAdapterV2.buildCodexTurnStartParams({
+          nativeThreadId: `native-workspace-${runtimeMode}`,
+          codexInput: [{ type: "text", text: "test" }],
+          runtimePolicy: { runtimeMode, interactionMode: "default", cwd: "/work/app", workspace },
+          modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
+          hasT3Mcp: false,
+        });
+
+      const autoAcceptEdits = yield* build("auto-accept-edits");
+      assert.deepEqual(autoAcceptEdits.sandboxPolicy, {
+        type: "workspaceWrite",
+        writableRoots: ["/work/api"],
+      });
+      assert.deepEqual((yield* build("approval-required")).sandboxPolicy, { type: "readOnly" });
+      assert.deepEqual((yield* build("full-access")).sandboxPolicy, { type: "dangerFullAccess" });
+      // The folder list reaches the model without T3 Code's MCP tools.
+      assert.deepEqual(Object.keys(autoAcceptEdits.additionalContext ?? {}), ["t3_code_workspace"]);
+      assert.include(
+        autoAcceptEdits.additionalContext?.["t3_code_workspace"]?.value,
+        "- api (Git repository): /work/api",
+      );
+    }),
+  );
+
   it.effect("sends the chosen cyber access program, else the model's default", () =>
     Effect.gen(function* () {
       const build = (value?: string, cyberAccess?: { defaultProgram: string | undefined }) =>
@@ -924,7 +955,7 @@ function withConfigReadBeforeTurnStart(
   let transcriptReads = 0;
   let previousOutbound: { readonly method: string; readonly id: number } | undefined;
   let failedMethod: string | undefined;
-  for (const entry of entries) {
+  for (const [index, entry] of entries.entries()) {
     const frame = entry.type === "runtime_exit" ? undefined : entry.frame;
     if (!Predicate.isObject(frame) || typeof frame.id !== "number") {
       result.push(entry);
@@ -955,6 +986,13 @@ function withConfigReadBeforeTurnStart(
           { ...(params.cwd === undefined ? {} : { cwd: params.cwd }), includeLayers: false },
           { config: {}, origins: {} },
         ]);
+      }
+      // Selected skills resolve after the name is set and before the turn they belong to.
+      const namedTurnThreadId =
+        frame.method === "skills/list" ? nextTurnStartThreadId(entries, index) : undefined;
+      if (namedTurnThreadId !== undefined && !namedThreads.has(namedTurnThreadId)) {
+        namedThreads.add(namedTurnThreadId);
+        exchanges.push(["thread/name/set", { threadId: namedTurnThreadId, name: threadName }, {}]);
       }
       if (frame.method === "turn/start") {
         if (!namedThreads.has(params.threadId)) {
@@ -996,6 +1034,20 @@ function withConfigReadBeforeTurnStart(
     );
   }
   return result;
+}
+
+function nextTurnStartThreadId(
+  entries: ReadonlyArray<CodexReplay.CodexAppServerReplayEntry>,
+  from: number,
+): unknown {
+  for (const entry of entries.slice(from + 1)) {
+    if (entry.type !== "expect_outbound" || !Predicate.isObject(entry.frame)) continue;
+    if (entry.frame.method === "turn/steer") return undefined;
+    if (entry.frame.method === "turn/start" && Predicate.isObject(entry.frame.params)) {
+      return entry.frame.params.threadId;
+    }
+  }
+  return undefined;
 }
 
 function withConfigReads(
@@ -3689,8 +3741,104 @@ describe("CodexAdapterV2 post-settle continuation", () => {
     ),
   );
 
+  it.effect("signs a Codex MCP server in only while it isn't connected in the thread", () =>
+    Effect.gen(function* () {
+      const nativeThreadId = "mcp-sign-in-thread";
+      const status = (
+        id: number,
+        runtimeStatus: string,
+      ): Array<CodexReplay.CodexAppServerReplayEntry> => [
+        {
+          type: "expect_outbound",
+          label: "mcpServerStatus/list",
+          frame: {
+            id,
+            method: "mcpServerStatus/list",
+            params: { serverName: "linear", threadId: nativeThreadId, detail: "toolsAndAuthOnly" },
+          },
+        },
+        {
+          type: "emit_inbound",
+          label: "mcpServerStatus/list",
+          frame: {
+            id,
+            result: {
+              data: [
+                {
+                  name: "linear",
+                  runtimeStatus,
+                  authStatus: "oAuth",
+                  tools: {},
+                  resources: [],
+                  resourceTemplates: [],
+                },
+              ],
+            },
+          },
+        },
+      ];
+      const authorizationUrl =
+        "https://linear.example/authorize?redirect_uri=http%3A%2F%2F127.0.0.1%3A50123%2Fcallback%2Fabc&state=s1";
+      const harness = yield* makeCodexReplayHarness(
+        makeCodexReplayTranscript({
+          scenario: "codex-mcp-sign-in",
+          entries: [
+            ...codexReplayPreamble({
+              nativeThreadId,
+              nativeTurnId: "unused",
+              prompt: "work",
+            }).slice(0, 5),
+            ...status(3, "connected"),
+            ...status(4, "authenticationRequired"),
+            {
+              type: "expect_outbound",
+              label: "mcpServer/oauth/login",
+              frame: {
+                id: 5,
+                method: "mcpServer/oauth/login",
+                params: { name: "linear", threadId: nativeThreadId },
+              },
+            },
+            {
+              type: "emit_inbound",
+              label: "mcpServer/oauth/login",
+              frame: { id: 5, result: { authorizationUrl } },
+            },
+            // A browser on Codex's machine reached its callback page before anything was pasted.
+            {
+              type: "emit_inbound",
+              label: "mcpServer/oauthLogin/completed",
+              frame: {
+                method: "mcpServer/oauthLogin/completed",
+                params: { name: "linear", threadId: nativeThreadId, success: true },
+              },
+            },
+          ],
+        }),
+      );
+      const mcpSignIn = harness.runtime.mcpSignIn;
+      assert.isDefined(mcpSignIn);
+      const input = { providerThread: harness.providerThread, server: "linear" };
+      assert.deepEqual(yield* mcpSignIn.start(input), { authorizationUrl: null });
+      assert.deepEqual(yield* mcpSignIn.start(input), { authorizationUrl });
+      yield* mcpSignIn.complete({
+        ...input,
+        callbackUrl: "127.0.0.1:50123/callback/abc?code=c1&state=s1",
+      });
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          IdAllocator.layer,
+          McpProviderSessions.layer,
+          NodeServices.layer,
+          NodeCrypto.layer,
+        ),
+      ),
+    ),
+  );
+
   it.effect.each(["before", "during"] as const)(
-    "surfaces a user MCP server that fails to start %s the turn",
+    "surfaces a user MCP server that fails to start %s the turn, with a sign-in when it needs one",
     (timing) =>
       Effect.gen(function* () {
         const nativeThreadId = "mcp-startup-failed-thread";
@@ -3722,6 +3870,22 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                 name: "example_mcp",
                 status: "failed",
                 error: startupError,
+                failureReason: null,
+              },
+            },
+          },
+          {
+            type: "emit_inbound",
+            label: "mcp-not-logged-in",
+            frame: {
+              method: "mcpServer/startupStatus/updated",
+              params: {
+                threadId: nativeThreadId,
+                name: "login_mcp",
+                status: "failed",
+                // Verbatim from codex-cli 0.171.0, which sets no failureReason for it.
+                error:
+                  "The login_mcp MCP server is not logged in. Run `codex mcp login login_mcp`.",
                 failureReason: null,
               },
             },
@@ -3765,11 +3929,15 @@ describe("CodexAdapterV2 post-settle continuation", () => {
           }),
         );
         yield* harness.firstTerminal;
-        const surfaced = harness.events.filter((event) => {
-          const serialized = JSON.stringify(event);
-          return serialized.includes("example_mcp") && serialized.includes("failed to start");
-        });
-        assert.isNotEmpty(surfaced);
+        const notices = harness.events.flatMap((event) =>
+          event.type === "turn_item.updated" && event.turnItem.type === "system_notice"
+            ? [[event.turnItem.title, event.turnItem.mcpSignIn?.server ?? null]]
+            : [],
+        );
+        assert.deepEqual(notices, [
+          ["MCP server example_mcp failed to start", null],
+          ["MCP server login_mcp failed to start", "login_mcp"],
+        ]);
       }).pipe(
         Effect.provide(
           Layer.mergeAll(
@@ -8084,6 +8252,23 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       expectedMessage: "Usage settings",
     },
     {
+      name: "invalid-encrypted-history",
+      code: "other",
+      message: JSON.stringify({
+        error: {
+          type: "invalid_request_error",
+          code: "invalid_encrypted_content",
+          message: "Encrypted content could not be decrypted or parsed.",
+        },
+        headers: { "x-codex-turn-state": "dummy-sensitive" },
+        status: 400,
+      }),
+      notification: true,
+      expectedClass: "provider_error",
+      expectedCode: "invalid_encrypted_content",
+      expectedMessage: "encrypted conversation history",
+    },
+    {
       name: "terminal-disconnection",
       code: "responseStreamDisconnected",
       notification: false,
@@ -8463,6 +8648,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       assert.equal(terminal?.status, "failed");
       if (terminal?.status !== "failed") return;
       assert.equal(terminal.failure.class, scenario.expectedClass);
+      assert.notInclude(terminal.failure.message, "dummy-sensitive");
       assert.equal(terminal.threadDisposition, "reusable");
       if (scenario.name === "message-reset")
         assert.equal(

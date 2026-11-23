@@ -222,8 +222,9 @@ a different row. Ungrouped mode keeps the existing row and drag-release interact
 
 Several threads often work in one worktree. Each worktree gets a colour, always paired with a text
 label (its branch, or its folder while the branch is a temporary `t3/...` name). The chat header and
-every sidebar thread row carry a soft left-edge fade (`.worktree-fade`); the command palette and
-sidebar rows tint their worktree icon; sidebar `workspace` groups show a dot. The fade is drawn only
+every sidebar thread row carry a soft left-edge fade (`.worktree-fade`); the command palette tints
+its worktree icon; sidebar `workspace` groups show a dot. Upstream rows show the environment, not
+the branch or a worktree icon, so a row's label is in its hover card. The fade is drawn only
 with background images inside `@layer components`, so row rings, focus rings, and the drag
 background still win. The selected row (`aria-current`) carries a stronger wash and edge so the
 colour still reads over its fill. A coloured row with an unsent draft drops the amber draft fill,

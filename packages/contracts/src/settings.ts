@@ -1440,8 +1440,9 @@ export const ServerSettings = Schema.Struct({
   /** Holds an OS sleep inhibitor while any run is active; closing a laptop lid still sleeps it. */
   keepAwakeWhileAgentsWork: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   /** New T3 Connect device keys wait for approval from someone already trusted here. */
+  // Fork: on by default; upstream lets a cloud login alone reach this machine.
   requireConnectDeviceApproval: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
+    Schema.withDecodingDefault(Effect.succeed(true)),
   ),
 
   enableAgentBrowserAccess: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),

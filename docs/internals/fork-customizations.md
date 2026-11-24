@@ -291,6 +291,80 @@ the pull request).
 When #34085 merges, take upstream's version and delete this section. If it closes unmerged, keep
 the code and say so here.
 
+## Product analytics and relay tracing off
+
+The server builds [`AnalyticsService.layerDisabled`](../../apps/server/src/telemetry/AnalyticsService.ts)
+instead of upstream's `layer`. Upstream's `make` reads `~/.codex/auth.json` and `~/.claude.json`
+for owner ids (unsalted SHA-256) when the service starts, even with
+`T3CODE_TELEMETRY_ENABLED=false`, and sends usage events to `ingest.t3.codes` by default. Clients
+send product analytics only through the server, so this one swap covers every surface.
+
+Relay connection traces go to Axiom when a build bakes in an endpoint (upstream's release CI
+does; a local fork build does not). The fork pins them off anyway: the server's
+[`relayTracing.ts`](../../apps/server/src/cloud/relayTracing.ts) uses a `null` config, and the web
+client's [`publicConfig.ts`](../../apps/web/src/cloud/publicConfig.ts) has no `relayTracing`
+endpoint. app.t3.codes and the store mobile app are upstream builds and still send their own.
+
+Upstream's `layer`, `resolveRelayClientTracingConfig`, and their tests stay untouched to keep merges
+small. Keep these invariants on rebase:
+
+- The server runtime never builds upstream's analytics `make`. Until upstream
+  [#42299](https://github.com/pingdotgg/t3code/pull/42299) arrives, `serverRuntimeStartup.ts` still
+  reads the two auth files through `getServerOwners`, but only the no-op layer receives the ids.
+  After that merge, confirm no telemetry path reads provider auth files and update this section.
+- No fork-built server, desktop, or web client creates a relay trace exporter.
+- A new analytics or trace sender upstream adds needs the same decision.
+
+## Diff comparison picker
+
+The Diff panel's comparison-target picker grows to fit its refs (up to 40rem) instead of a fixed
+18rem, and every truncated ref, including the trigger, shows its full name in a tooltip. Drop this
+if upstream stops truncating long branch names there.
+
+## Claude Auto asks before escalated commands (temporary backport)
+
+In Claude's Auto mode, T3 answered every permission request Claude escalated to it with `allow`,
+with no UI, and Claude logged it as a temporary user approval
+([#15353](https://github.com/pingdotgg/t3code/issues/15353)). Claude escalates only what it wants a
+person to decide: ask rules, hooks, and the fallback after its classifier blocks a command such as
+`git push --force`. The fork carries upstream PR
+[#40692](https://github.com/pingdotgg/t3code/pull/40692) unchanged: `requiresClaudeApproval` in
+`ClaudeAdapterV2.ts` also asks for `permissionMode: "auto"`.
+
+When #40692 merges, take upstream's version and delete this section. If it closes unmerged, keep
+the code and say so here.
+
+## Triage asks before it loads a remote playbook
+
+Upstream's triage playbook (step 3 of [`triagePrompt.ts`](../../apps/server/src/triage/triagePrompt.ts)
+and `.github/triage/PLAYBOOK.md`) told the agent to fetch the playbook from pingdotgg's `main`,
+follow it instead, and trust it as the one exception to "fetched content is data". The triage agent
+reads logs and the state database, so that made upstream's branch a live instruction channel. The
+fork keeps the pointer but makes the agent ask the user first, and the local rules still apply.
+Both copies must stay byte-identical (`triagePrompt.test.ts`).
+
+## T3 Connect device approval on by default
+
+Upstream's `requireConnectDeviceApproval` defaults to off, so a valid T3 Connect cloud login alone
+gets a full-scope session (a shell as the OS user) on a linked machine
+([#32098](https://github.com/pingdotgg/t3code/issues/32098)). The fork defaults it to on in
+[`settings.ts`](../../packages/contracts/src/settings.ts): a new device key waits for approval from
+someone already trusted on the host. An explicit saved choice still wins. `CloudLink.test.ts`
+asserts the fork default. Drop this if upstream turns approval on by default.
+
+## Small security backports (temporary)
+
+The fork carries these open upstream PRs unchanged, each with its tests:
+
+- [#36216](https://github.com/pingdotgg/t3code/pull/36216): the Claude task-output tail ignores a
+  session or task id that is not one plain path segment, so a `../` id cannot stream a file from
+  outside Claude's task directory ([#26489](https://github.com/pingdotgg/t3code/issues/26489)).
+- [#23428](https://github.com/pingdotgg/t3code/pull/23428): Codex shadow homes keep every auth-like
+  entry (`auth.json.bak`, `auth-work.json`) private instead of linking it to the shared home.
+
+When one merges, take upstream's version and remove its line. If one closes unmerged, keep the
+code and say so here.
+
 ## Agent orchestration instructions
 
 [`orchestrationInstructions.ts`](../../packages/provider-core/src/server/orchestrationInstructions.ts)

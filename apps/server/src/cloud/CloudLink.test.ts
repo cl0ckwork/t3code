@@ -319,8 +319,9 @@ it.effect("mints a T3 Connect credential under the host's device approval settin
         },
       }).pipe(Effect.provide(NodePlatformCrypto.layerSignature));
       yield* mintCredential({ proof });
+      // Fork default: a new device waits for approval.
       assert.deepEqual(connectCredentialRequests, [
-        { proofKeyThumbprint: "client-jkt", requireApproval: false },
+        { proofKeyThumbprint: "client-jkt", requireApproval: true },
       ]);
       const markers = [...stored.keys()].filter((name) => !before.has(name)).toSorted();
       assert.lengthOf(markers, 2);

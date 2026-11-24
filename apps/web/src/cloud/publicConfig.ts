@@ -31,15 +31,6 @@ export function trimNonEmpty(value: string | undefined): string | null {
   return value?.trim() || null;
 }
 
-function normalizeSecureUrl(value: string): string | null {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" ? url.toString() : null;
-  } catch {
-    return null;
-  }
-}
-
 export function resolveCloudPublicConfig(): CloudPublicConfig {
   return {
     clerkPublishableKey: trimNonEmpty(
@@ -49,15 +40,8 @@ export function resolveCloudPublicConfig(): CloudPublicConfig {
     relayUrl: normalizeSecureRelayUrl(
       (import.meta.env.VITE_T3CODE_RELAY_URL as string | undefined) ?? "",
     ),
-    relayTracing: {
-      tracesUrl: normalizeSecureUrl(
-        (import.meta.env.VITE_RELAY_OTLP_TRACES_URL as string | undefined) ?? "",
-      ),
-      tracesDataset: trimNonEmpty(
-        import.meta.env.VITE_RELAY_OTLP_TRACES_DATASET as string | undefined,
-      ),
-      tracesToken: trimNonEmpty(import.meta.env.VITE_RELAY_OTLP_TRACES_TOKEN as string | undefined),
-    },
+    // Fork: no relay traces leave this client, even if a build sets VITE_RELAY_OTLP_TRACES_*.
+    relayTracing: { tracesUrl: null, tracesDataset: null, tracesToken: null },
   };
 }
 

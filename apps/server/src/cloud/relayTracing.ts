@@ -10,7 +10,8 @@ import * as ServerConfig from "../config.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
 import { resolveRelayClientTracingConfig } from "./publicConfig.ts";
 
-const relayClientTracingConfig = resolveRelayClientTracingConfig();
+// Fork: no relay traces leave this server, even if a build bakes in an endpoint.
+const relayClientTracingConfig: ReturnType<typeof resolveRelayClientTracingConfig> = null;
 
 /** Relay traces leave the machine for T3 Connect, so a policy with `telemetry: false` stops them. */
 export const relayLayer = (

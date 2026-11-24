@@ -364,3 +364,14 @@ export const make = Effect.gen(function* () {
 });
 
 export const layer = Layer.effect(AnalyticsService, make);
+
+// Fork: product analytics are off. `make` reads ~/.codex/auth.json and ~/.claude.json at
+// construction, even with T3CODE_TELEMETRY_ENABLED=false, so the server never builds it.
+export const layerDisabled = Layer.succeed(
+  AnalyticsService,
+  AnalyticsService.of({
+    record: Effect.fn("AnalyticsService.record")(() => Effect.succeed(false)),
+    flush: Effect.void,
+    recordOwners: Effect.fn("AnalyticsService.recordOwners")(() => Effect.void),
+  }),
+);

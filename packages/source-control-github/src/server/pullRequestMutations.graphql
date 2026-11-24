@@ -162,6 +162,15 @@ mutation DequeuePullRequest($pullRequestId: ID!) {
   }
 }
 
+# Its own document: Enterprise Server rejects `includeStack` wherever it is named.
+mutation DisableStackAutoMerge($pullRequestId: ID!) {
+  disablePullRequestAutoMerge(input: { pullRequestId: $pullRequestId, includeStack: true }) {
+    pullRequest {
+      ...PullRequestActionSummary
+    }
+  }
+}
+
 mutation UpdatePullRequestBranch(
   $pullRequestId: ID!
   $expectedHeadOid: GitObjectID!

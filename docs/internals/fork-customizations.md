@@ -272,6 +272,13 @@ The mechanism is intentionally local to the detail panel:
 Do not turn an automatic read into a code refresh. A stale toast is scoped to its PR and closes
 when the reader navigates away, so it cannot refresh a different PR later.
 
+Upstream [#41761](https://github.com/pingdotgg/t3code/pull/41761) pins a merge or review to the
+head the reader first saw (`seenPullRequestHead`) and shows a "New commits were pushed" banner
+whose "Load new commits" moves the pin. It still polls and still reloads the diff on any new
+revision, so it does not replace this section; both run. The fork's toast and menu Refresh reload
+the diff but do not move upstream's pin, so the banner stays until "Load new commits" is used, and
+a merge in that window is refused against the old head (safe, but two clicks).
+
 ## Merge-queue status (temporary backport)
 
 A GitHub pull request in the merge queue showed "Squash and merge" because T3 never read

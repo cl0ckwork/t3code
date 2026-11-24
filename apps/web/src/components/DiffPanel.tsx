@@ -1309,19 +1309,28 @@ export default function DiffPanel({
                 selectBranchBaseRef(value === AUTOMATIC_BASE_REF ? null : value);
               }}
             >
-              <ComboboxTrigger
-                render={<Button variant="ghost-muted" size="xs" />}
-                className="min-w-9 max-w-48 shrink-0"
-                aria-label={gt("Change comparison target. Currently {base}", {
-                  base: comparisonBaseRef,
-                })}
-              >
-                <span className="min-w-0 truncate">{comparisonBaseRef}</span>
-                <ChevronDownIcon className="size-3.5 shrink-0 opacity-70" />
-              </ComboboxTrigger>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <ComboboxTrigger
+                      render={<Button variant="ghost-muted" size="xs" />}
+                      className="min-w-9 max-w-80 shrink-0"
+                      aria-label={gt("Change comparison target. Currently {base}", {
+                        base: comparisonBaseRef,
+                      })}
+                    />
+                  }
+                >
+                  <span className="min-w-0 truncate">{comparisonBaseRef}</span>
+                  <ChevronDownIcon className="size-3.5 shrink-0 opacity-70" />
+                </TooltipTrigger>
+                <TooltipPopup side="top" className="max-w-96 wrap-anywhere">
+                  {comparisonBaseRef}
+                </TooltipPopup>
+              </Tooltip>
               <ComboboxPopup
                 align="start"
-                className="w-72 min-w-0 max-w-[calc(100vw-1rem)] overflow-hidden"
+                className="w-max min-w-72 max-w-[min(40rem,calc(100vw-1rem))] overflow-hidden"
               >
                 <ComboboxSearchInput
                   placeholder={gt("Search refs...")}
@@ -1362,7 +1371,16 @@ export default function DiffPanel({
                         value={item}
                       >
                         <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_2rem] items-center overflow-hidden">
-                          <span className="block min-w-0 truncate pe-2">{choice.label}</span>
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={<span className="block min-w-0 truncate pe-2" />}
+                            >
+                              {choice.label}
+                            </TooltipTrigger>
+                            <TooltipPopup side="top" className="max-w-96 wrap-anywhere">
+                              {choice.label}
+                            </TooltipPopup>
+                          </Tooltip>
                           {hasBoth ? (
                             <div
                               className="flex justify-end"

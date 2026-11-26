@@ -294,10 +294,12 @@ the code and say so here.
 ## Product analytics and relay tracing off
 
 The server builds [`AnalyticsService.layerDisabled`](../../apps/server/src/telemetry/AnalyticsService.ts)
-instead of upstream's `layer`. Upstream's `make` reads `~/.codex/auth.json` and `~/.claude.json`
-for owner ids (unsalted SHA-256) when the service starts, even with
-`T3CODE_TELEMETRY_ENABLED=false`, and sends usage events to `ingest.t3.codes` by default. Clients
-send product analytics only through the server, so this one swap covers every surface.
+instead of upstream's `layer`. Upstream's `make` sends usage events to `ingest.t3.codes` unless
+`T3CODE_TELEMETRY_ENABLED=false`. Clients send product analytics only through the server, so this
+one swap covers every surface. Upstream
+[#42299](https://github.com/pingdotgg/t3code/pull/42299) stopped reading Codex and Claude auth
+files for owner ids; the server owner is now only the hashed T3 Connect account. That removed the
+fork's original privacy trigger, but upstream analytics are still on by default, so the swap stays.
 
 Relay connection traces go to Axiom when a build bakes in an endpoint (upstream's release CI
 does; a local fork build does not). The fork pins them off anyway: the server's
@@ -308,31 +310,17 @@ endpoint. app.t3.codes and the store mobile app are upstream builds and still se
 Upstream's `layer`, `resolveRelayClientTracingConfig`, and their tests stay untouched to keep merges
 small. Keep these invariants on rebase:
 
-- The server runtime never builds upstream's analytics `make`. Until upstream
-  [#42299](https://github.com/pingdotgg/t3code/pull/42299) arrives, `serverRuntimeStartup.ts` still
-  reads the two auth files through `getServerOwners`, but only the no-op layer receives the ids.
-  After that merge, confirm no telemetry path reads provider auth files and update this section.
+- The server runtime never builds upstream's analytics `make`.
 - No fork-built server, desktop, or web client creates a relay trace exporter.
 - A new analytics or trace sender upstream adds needs the same decision.
+
+Drop this section if upstream makes analytics opt-in.
 
 ## Diff comparison picker
 
 The Diff panel's comparison-target picker grows to fit its refs (up to 40rem) instead of a fixed
 18rem, and every truncated ref, including the trigger, shows its full name in a tooltip. Drop this
 if upstream stops truncating long branch names there.
-
-## Claude Auto asks before escalated commands (temporary backport)
-
-In Claude's Auto mode, T3 answered every permission request Claude escalated to it with `allow`,
-with no UI, and Claude logged it as a temporary user approval
-([#15353](https://github.com/pingdotgg/t3code/issues/15353)). Claude escalates only what it wants a
-person to decide: ask rules, hooks, and the fallback after its classifier blocks a command such as
-`git push --force`. The fork carries upstream PR
-[#40692](https://github.com/pingdotgg/t3code/pull/40692) unchanged: `requiresClaudeApproval` in
-`ClaudeAdapterV2.ts` also asks for `permissionMode: "auto"`.
-
-When #40692 merges, take upstream's version and delete this section. If it closes unmerged, keep
-the code and say so here.
 
 ## Triage asks before it loads a remote playbook
 
